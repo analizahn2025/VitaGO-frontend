@@ -1,0 +1,35 @@
+abstract final class AppPermissions {
+  static const viewUsers = 'usuario.ver';
+  static const manageUsers = 'usuario.administrar';
+  static const assignRoles = 'rol.asignar';
+  static const viewCompanies = 'empresa.ver';
+  static const viewBranches = 'sucursal.ver';
+  static const manageBranches = 'sucursal.administrar';
+  static const viewLocations = 'ubicacion.ver';
+  static const createLocations = 'ubicacion.crear';
+  static const approveLocations = 'ubicacion.aprobar';
+  static const viewRequests = 'solicitud.ver';
+  static const viewOwnRequests = 'solicitud.ver_propias';
+  static const viewAssignedRequests = 'solicitud.ver_asignadas';
+  static const createRequests = 'solicitud.crear';
+  static const createSpecialRequests = 'solicitud.crear_envio_especial';
+  static const assignRequests = 'solicitud.asignar';
+  static const reassignRequests = 'solicitud.reasignar';
+  static const updateRequestStatus = 'solicitud.actualizar_estado';
+  static const cancelRequests = 'solicitud.cancelar';
+  static const viewRequestTracking = 'solicitud.ver_seguimiento';
+  static const viewVehicles = 'vehiculo.ver';
+  static const manageVehicles = 'vehiculo.administrar';
+  static const viewDrivers = 'repartidor.ver';
+  static const manageDrivers = 'repartidor.administrar';
+  static const updateOwnDriverStatus = 'repartidor.actualizar_estado';
+  static const updateOwnDriverCapacity = 'repartidor.actualizar_capacidad';
+  static const registerDriverLocation = 'repartidor.registrar_ubicacion';
+  static const startShift = 'jornada.iniciar';
+  static const viewShifts = 'jornada.ver';
+  static const finishShift = 'jornada.finalizar';
+  static const viewEvidence = 'evidencia.ver';
+  static const createEvidence = 'evidencia.crear';
+  static const createIncidents = 'incidencia.crear';
+  static const reviewIncidents = 'incidencia.revisar';
+}
