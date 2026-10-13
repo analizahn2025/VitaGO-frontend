@@ -2,12 +2,11 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:uuid/uuid.dart';
+import 'package:vitago_app/core/device/device_location_service.dart';
 import 'package:vitago_app/core/errors/app_failure.dart';
 import 'package:vitago_app/features/shifts/controllers/shifts_controller.dart';
 import 'package:vitago_app/features/tracking/controllers/driver_tracking_status_controller.dart';
-import 'package:vitago_app/features/tracking/controllers/tracking_controller.dart';
-import 'package:vitago_app/features/tracking/models/tracking_point.dart';
+import 'package:vitago_app/features/tracking/models/tracking_configuration.dart';
 import 'package:vitago_app/features/tracking/providers/tracking_providers.dart';
 
 class DriverAutomaticTracking extends ConsumerStatefulWidget {
@@ -28,13 +27,16 @@ class DriverAutomaticTracking extends ConsumerStatefulWidget {
 class _DriverAutomaticTrackingState
     extends ConsumerState<DriverAutomaticTracking>
     with WidgetsBindingObserver {
-  final _uuid = const Uuid();
-  Timer? _timer;
-  TrackingPointInput? _pendingPoint;
+  StreamSubscription<DeviceLocation>? _locationSubscription;
+  Timer? _sendTimer;
+  TrackingConfiguration _configuration = TrackingConfiguration.defaults;
+  DateTime? _lastCapturedAt;
   String? _shiftId;
+  bool _starting = false;
   bool _sending = false;
   bool? _lastGpsEnabled;
   bool _gpsDialogOpen = false;
+  int _generation = 0;
 
   @override
   void initState() {
@@ -47,19 +49,16 @@ class _DriverAutomaticTrackingState
     if (state == AppLifecycleState.resumed) {
       ref.invalidate(locationServiceEnabledProvider);
       ref.invalidate(activeShiftControllerProvider);
-      return;
+      if (_shiftId case final shiftId?) unawaited(_flush(shiftId));
     }
-    if (state == AppLifecycleState.paused ||
-        state == AppLifecycleState.hidden ||
-        state == AppLifecycleState.detached) {
-      _stop();
-    }
+    // No detener el stream al abrir Maps, bloquear la pantalla o pasar a
+    // segundo plano: la jornada debe conservar su cola GPS.
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
-    _timer?.cancel();
+    _stop(updateStatus: false);
     super.dispose();
   }
 
@@ -75,18 +74,138 @@ class _DriverAutomaticTrackingState
     final gpsEnabled = ref.watch(locationServiceEnabledProvider).value == true;
     _handleGpsState(gpsEnabled);
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      _synchronize(shift?.id, gpsEnabled);
+      if (mounted) _synchronize(shift?.id, gpsEnabled);
     });
     return widget.child;
   }
 
   void _synchronize(String? shiftId, bool gpsEnabled) {
     if (widget.enabled && shiftId != null && gpsEnabled) {
-      if (_timer == null || _shiftId != shiftId) _start(shiftId);
+      if (_shiftId != shiftId && !_starting) unawaited(_start(shiftId));
       return;
     }
     _stop();
+  }
+
+  Future<void> _start(String shiftId) async {
+    _starting = true;
+    _stop();
+    final generation = ++_generation;
+    _shiftId = shiftId;
+    final status = ref.read(driverTrackingStatusProvider.notifier);
+    status.setActive(true);
+    try {
+      try {
+        _configuration = await ref.read(trackingConfigurationProvider.future);
+      } on Object {
+        _configuration = TrackingConfiguration.defaults;
+      }
+      await ref.read(deviceLocationServiceProvider).ensurePermission();
+      if (!mounted || generation != _generation || _shiftId != shiftId) return;
+
+      await ref
+          .read(trackingQueueCoordinatorProvider)
+          .flushAll(maximumBatchSize: _configuration.maximumBatchSize);
+      final firstLocation = await ref
+          .read(deviceLocationServiceProvider)
+          .getCurrentLocation();
+      await _capture(shiftId, firstLocation, force: true);
+
+      _locationSubscription = ref
+          .read(deviceLocationServiceProvider)
+          .watchLocations(
+            interval: Duration(seconds: _configuration.movingCaptureSeconds),
+          )
+          .listen(
+            (location) => unawaited(_capture(shiftId, location)),
+            onError: (Object error) {
+              status.reportError(
+                error is AppFailure
+                    ? error.message
+                    : 'No fue posible continuar el seguimiento GPS.',
+              );
+            },
+          );
+      _sendTimer = Timer.periodic(
+        Duration(seconds: _configuration.sendIntervalSeconds),
+        (_) => unawaited(_flush(shiftId)),
+      );
+    } on AppFailure catch (failure) {
+      status.reportError(failure.message);
+    } finally {
+      _starting = false;
+    }
+  }
+
+  Future<void> _capture(
+    String shiftId,
+    DeviceLocation location, {
+    bool force = false,
+  }) async {
+    if (_shiftId != shiftId) return;
+    final moving = (location.speedMetersPerSecond ?? 0) >= 0.7;
+    final cadence = Duration(
+      seconds: moving
+          ? _configuration.movingCaptureSeconds
+          : _configuration.stoppedCaptureSeconds,
+    );
+    if (!force &&
+        _lastCapturedAt != null &&
+        location.recordedAt.difference(_lastCapturedAt!).abs() < cadence) {
+      return;
+    }
+    await ref.read(trackingQueueCoordinatorProvider).capture(shiftId, location);
+    _lastCapturedAt = location.recordedAt;
+    final pending = await ref
+        .read(trackingQueueCoordinatorProvider)
+        .pendingCount(shiftId);
+    ref.read(driverTrackingStatusProvider.notifier).setPendingPoints(pending);
+    if (force) await _flush(shiftId);
+  }
+
+  Future<void> _flush(String shiftId) async {
+    if (_sending || _shiftId != shiftId) return;
+    _sending = true;
+    final status = ref.read(driverTrackingStatusProvider.notifier);
+    status.setSending(true);
+    try {
+      await ref
+          .read(trackingQueueCoordinatorProvider)
+          .flush(shiftId, maximumBatchSize: _configuration.maximumBatchSize);
+      final pending = await ref
+          .read(trackingQueueCoordinatorProvider)
+          .pendingCount(shiftId);
+      status.markSynced(DateTime.now(), pendingPoints: pending);
+    } on AppFailure catch (failure) {
+      final pending = await ref
+          .read(trackingQueueCoordinatorProvider)
+          .pendingCount(shiftId);
+      status.setPendingPoints(pending);
+      status.reportError(
+        '$pending punto${pending == 1 ? '' : 's'} guardado${pending == 1 ? '' : 's'} para reenviar. ${failure.message}',
+      );
+    } finally {
+      _sending = false;
+      status.setSending(false);
+    }
+  }
+
+  void _stop({bool updateStatus = true}) {
+    if (_locationSubscription == null &&
+        _sendTimer == null &&
+        _shiftId == null) {
+      return;
+    }
+    _generation += 1;
+    unawaited(_locationSubscription?.cancel());
+    _locationSubscription = null;
+    _sendTimer?.cancel();
+    _sendTimer = null;
+    _shiftId = null;
+    _lastCapturedAt = null;
+    if (updateStatus) {
+      ref.read(driverTrackingStatusProvider.notifier).setActive(false);
+    }
   }
 
   void _handleGpsState(bool enabled) {
@@ -124,68 +243,5 @@ class _DriverAutomaticTrackingState
       );
       _gpsDialogOpen = false;
     });
-  }
-
-  void _start(String shiftId) {
-    _timer?.cancel();
-    if (_shiftId != shiftId) _pendingPoint = null;
-    _shiftId = shiftId;
-    ref.read(driverTrackingStatusProvider.notifier).setActive(true);
-    unawaited(_send(shiftId));
-    _timer = Timer.periodic(const Duration(seconds: 30), (_) {
-      unawaited(_send(shiftId));
-    });
-  }
-
-  void _stop() {
-    if (_timer == null && _shiftId == null) return;
-    _timer?.cancel();
-    _timer = null;
-    _shiftId = null;
-    _pendingPoint = null;
-    ref.read(driverTrackingStatusProvider.notifier).setActive(false);
-  }
-
-  Future<void> _send(String shiftId) async {
-    if (_sending) return;
-    _sending = true;
-    ref.read(driverTrackingStatusProvider.notifier).setSending(true);
-    try {
-      var point = _pendingPoint;
-      if (point == null) {
-        final location = await ref
-            .read(deviceLocationServiceProvider)
-            .getCurrentLocation();
-        point = TrackingPointInput(
-          clientId: _uuid.v4(),
-          latitude: location.latitudeText,
-          longitude: location.longitudeText,
-          accuracyMeters: location.accuracyMeters?.toStringAsFixed(2),
-          speedMetersPerSecond: location.speedMetersPerSecond?.toStringAsFixed(
-            3,
-          ),
-          headingDegrees: location.headingDegrees
-              ?.clamp(0, 359.99)
-              .toStringAsFixed(2),
-          recordedAt: location.recordedAt,
-        );
-        _pendingPoint = point;
-      }
-      await ref
-          .read(trackingActionsControllerProvider)
-          .register(TrackingBatchInput(shiftId: shiftId, points: [point]));
-      _pendingPoint = null;
-      if (_shiftId != shiftId) return;
-      ref
-          .read(driverTrackingStatusProvider.notifier)
-          .markSynced(DateTime.now());
-    } on AppFailure catch (failure) {
-      ref
-          .read(driverTrackingStatusProvider.notifier)
-          .reportError(failure.message);
-    } finally {
-      _sending = false;
-      ref.read(driverTrackingStatusProvider.notifier).setSending(false);
-    }
   }
 }

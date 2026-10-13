@@ -18,12 +18,23 @@ El código del backend sigue siendo la fuente técnica definitiva. Este archivo
 es la referencia de integración para el frontend y solo presenta como
 **disponibles** las funciones que ya están implementadas.
 
-Última actualización: **2026-10-06**.
+Última actualización: **2026-10-13**.
+
+Regla vigente: la sección «Control de GPS y consolidación de kilometraje
+(0.26.0)» sustituye las descripciones anteriores de asignación sin GPS y
+congelación inmediata del kilometraje de cierres nuevos.
+
+La sección «Ruta inicial y navegación externa (0.27.0)» sustituye las
+descripciones anteriores que indican que `mi-ruta/` no ofrece navegación
+o que `ruta_calculada` siempre es `false`. Google está preparado pero
+desactivado: no hay clave real ni llamadas facturables realizadas en esta fase.
 
 ## 2. Historial de cambios
 
 | Versión | Fecha | Cambio |
 |---|---|---|
+| 0.27.0 | 2026-10-13 | Navegación externa a próxima parada sin clave; POST explícito de ruta inicial para motocicleta, GPS vigente, reutilización al completar paradas, presupuesto transaccional y reintentos acotados. Proveedor Google preparado y desactivado; geometría temporal y métricas no persistidas. |
+| 0.26.0 | 2026-10-13 | Asignación con GPS vigente por defecto; sesión/secuencia GPS; filtros de huecos y deriva; cierre operativo independiente de consolidación; calidad, minutos operativos y revisiones auditables; exclusividad del prioritario recogido validada al operar. |
 | 0.25.2 | 2026-10-06 | Se añadieron consultas paginadas de rutas y versiones históricas, más el detalle de paradas congeladas por versión, con acceso del motorista propietario o de supervisión autorizada. |
 | 0.25.1 | 2026-10-06 | `mi-ruta/` añade `ruta_id` y `version_actual`; el backend conserva versiones inmutables del orden de paradas, sin calcular navegación vial. |
 | 0.25.0 | 2026-10-06 | Se añadió `GET /api/v1/rutas/mi-ruta/`: paradas operativas pendientes y próxima parada para el motorista propietario, con orden provisional por asignación, prioridad recogida primero y envío especial sin mapa. |
@@ -184,6 +195,7 @@ nombre predeterminado del claim es `sub`, aunque es configurable por despliegue.
 | `GET` | `/api/v1/jornadas/{jornada_id}/` | Ambos | Bearer + `jornada.ver` en alcance | `200` |
 | `POST` | `/api/v1/jornadas/{jornada_id}/finalizar/` | Ambos | Motorista propietario + `jornada.finalizar` | `200` |
 | `GET` | `/api/v1/rutas/mi-ruta/` | Ambos | Motorista propio + `solicitud.ver_asignadas` | `200` |
+| `POST` | `/api/v1/rutas/mi-ruta/calcular/` | Ambos | Motorista propio + `solicitud.ver_asignadas` + `ruta.calcular` | `200` |
 | `GET` | `/api/v1/rutas/` | Ambos | Propietario + `ruta.ver`, o administración autorizada | `200` |
 | `GET` | `/api/v1/rutas/{ruta_id}/versiones/` | Ambos | Misma visibilidad de la ruta | `200` |
 | `GET` | `/api/v1/rutas/{ruta_id}/versiones/{numero}/` | Ambos | Misma visibilidad de la ruta | `200` |
@@ -2501,8 +2513,10 @@ normales válidos o un envío especial finalizado. Si no hay datos suficientes,
 vale `false` y `kilometros_operativos="0.000"`; el frontend debe mostrar
 «Kilometraje no disponible», no interpretar el cero como distancia recorrida.
 Durante una jornada activa el resumen aún no se ha calculado y el indicador
-permanece en `false`. El valor se congela al cerrar: enviar los GPS pendientes
-**antes** de llamar a `finalizar/`; los puntos tardíos no recalculan el resumen.
+permanece en `false`. En cierres nuevos consultar `calidad_kilometraje`: un
+cierre con manifiesto GPS incompleto queda pendiente y se consolida al recibir
+sus puntos. Sin manifiesto el resultado es `SIN_VERIFICAR`; puede confirmarse
+mediante `sincronizacion-gps/`. Los cierres históricos no se recalculan.
 Las jornadas históricas conservan `kilometraje_disponible=false` sin recálculo.
 Las incidencias se calculan desde su módulo y
 `incidencias_disponibles=true`.
@@ -3128,3 +3142,556 @@ y el campo:
 
 Un `400` o `409` recibido con JSON es una respuesta del backend y no debe
 mostrarse como error genérico de conexión.
+
+## Control de GPS y consolidación de kilometraje (0.26.0)
+
+### Configuración del dispositivo
+
+```http
+GET /api/v1/seguimiento/configuracion/
+Authorization: Bearer <access_token>
+```
+
+Solo motorista propietario con perfil activo y
+`repartidor.registrar_ubicacion`. `401` sin sesión, `404` sin perfil, `403`
+sin permiso. Respuesta `200` con los valores efectivos del despliegue:
+
+```json
+{
+  "intervalo_captura_movimiento_segundos": 5,
+  "intervalo_captura_detenido_segundos": 30,
+  "intervalo_envio_segundos": 20,
+  "tamano_maximo_lote": 200,
+  "antiguedad_maxima_asignacion_segundos": 120,
+  "precision_maxima_asignacion_metros": 50.0,
+  "asignacion_requiere_gps_vigente": true,
+  "intervalo_maximo_medicion_segundos": 30,
+  "cobertura_minima_porcentaje": 90.0
+}
+```
+
+Captura y envío son independientes. Persistir la cola local, incluso sin
+internet; enviar además al iniciar/finalizar operaciones. La app móvil debe
+mantener el servicio de ubicación correctamente cuando está en segundo plano
+o abre otro navegador. Estas capacidades no se implementan desde Django.
+Los intervalos son valores iniciales configurables, sujetos a pruebas de
+batería/precisión en teléfonos físicos.
+
+La asignación automática Corporate exige por defecto una posición de jornada
+`ACTIVA`, capturada hace como máximo 120 segundos, no futura, con precisión
+conocida de hasta 50 metros. Si no hay candidato permanece `PENDING`. Recibir
+un lote GPS vigente reintenta pendientes tras el commit, hasta cinco por
+evento. Para que el primer servicio se asigne, iniciar jornada y enviar GPS:
+las coordenadas del inicio de jornada por sí solas no sustituyen un registro
+de ubicación con precisión. Motoristas de prueba siguen las mismas reglas.
+El fallback sin GPS solo existe si se configura expresamente
+`ASIGNACION_REQUIERE_GPS_VIGENTE=false`; no es el valor recomendado.
+La asignación manual autorizada permite decidir ante falta de GPS.
+
+### Sesiones y secuencias para verificar sincronización
+
+`POST /api/v1/seguimiento/registros/` conserva el contrato anterior y acepta
+dos campos adicionales por punto, siempre juntos:
+
+```json
+{
+  "jornada_id": "fa714070-b19e-4d63-8463-e4eea308a050",
+  "registros": [
+    {
+      "id_cliente": "3c645b08-905d-412a-a7b8-dfdde1621f1f",
+      "sesion_gps": "119d601d-d835-46fd-81dd-7e2cd71f3e6e",
+      "secuencia": 1,
+      "latitud": "14.000000",
+      "longitud": "-87.000000",
+      "precision_metros": "8.00",
+      "velocidad_metros_segundo": "4.250",
+      "rumbo_grados": "180.00",
+      "registrada_en": "2026-10-13T16:00:00Z"
+    }
+  ]
+}
+```
+
+La respuesta `201` conserva `recibidos`, `creados`, `repetidos`, `registros`;
+cada registro añade `sesion_gps` y `secuencia` (ambos `null` para clientes
+antiguos). Generar un UUID de sesión de captura y una secuencia desde 1;
+persistir sesión, próximo número, UUID de punto y contenido antes de enviar.
+Reintentar exactamente el mismo punto, sin cambiar UUID, hora ni secuencia.
+La sesión no puede reutilizarse en otra jornada. Si se inicia otra sesión,
+declarar también las anteriores al cerrar; máximo 50 sesiones por manifiesto.
+La recepción puede desordenarse: el cálculo usa la hora de captura.
+
+`400` si se reutiliza una secuencia con otro UUID, se cambia el contenido de
+un UUID existente, falta uno de los campos o el timestamp no pertenece a la
+jornada. Un cierre ya verificado solo admite reintentos idénticos de sus
+puntos; sus secuencias y manifiesto son inmutables.
+
+### Cierre y confirmación
+
+`POST /api/v1/jornadas/{jornada_id}/finalizar/` añade un manifiesto opcional:
+
+```json
+{
+  "latitud": "14.000200",
+  "longitud": "-87.000000",
+  "sesiones_gps": [
+    {
+      "sesion_gps": "119d601d-d835-46fd-81dd-7e2cd71f3e6e",
+      "ultima_secuencia": 3
+    }
+  ]
+}
+```
+
+Declarar el último número **generado** de cada sesión, incluyendo los puntos
+pendientes en el teléfono y los no operativos. El servidor verifica todos los
+números `1..ultima_secuencia`, no solo la presencia del último. `[]` solo
+confirma ausencia de datos si efectivamente no existen registros; no convierte
+la falta de GPS en una distancia cero válida. Los puntos antiguos sin sesión
+impiden verificar el manifiesto: adoptar el protocolo desde una jornada nueva.
+
+La jornada se cierra operativamente y libera al motorista aunque la medición
+quede pendiente; sin asignaciones activas sigue siendo un requisito. La
+respuesta completa sigue el JSON de jornada documentado previamente y añade
+`minutos_operativos` (entero o `null`) y `calidad_kilometraje` (objeto).
+Ejemplo del objeto nuevo con un punto pendiente:
+
+```json
+{
+  "estado": "PENDIENTE_SINCRONIZACION",
+  "metodo": "GPS_FILTRADO",
+  "sincronizacion_verificada": false,
+  "puntos_pendientes": 1,
+  "sesiones_gps": [
+    {"sesion_gps": "119d601d-d835-46fd-81dd-7e2cd71f3e6e", "ultima_secuencia": 3}
+  ],
+  "puntos_considerados": 2,
+  "puntos_descartados": 0,
+  "puntos_sin_precision": 0,
+  "segmentos_validos": 1,
+  "huecos_detectados": 0,
+  "segundos_cubiertos": 10.0,
+  "segundos_operativos": 10.0,
+  "especiales_sin_calidad": 0,
+  "movimientos_pendientes": 0,
+  "cobertura_porcentaje": 100.0,
+  "revision": 1,
+  "actualizada_en": "2026-10-13T16:00:12Z"
+}
+```
+
+Los contadores son una instantánea de esa revisión, no un contador continuo
+de la cola. El envío del último lote pendiente provoca la consolidación
+automática. Un reintento idéntico no genera otra revisión.
+
+Para confirmar posteriormente un cierre nuevo que se hizo sin manifiesto,
+o corregir un manifiesto pendiente:
+
+```http
+POST /api/v1/jornadas/{jornada_id}/sincronizacion-gps/
+```
+
+Cuerpo: `{"sesiones_gps": [...]}` con el formato anterior. Devuelve `200`
+con la jornada completa. Requiere propietario y `jornada.finalizar`; `404`
+si es ajena, inexistente o no finalizada; `400` si intenta cambiar un cierre
+verificado o recalcular uno histórico.
+
+### Estados de la medición y presentación
+
+| `calidad_kilometraje.estado` | Presentación |
+|---|---|
+| `SIN_VERIFICAR` | Estimación sin confirmación de sincronización. |
+| `PENDIENTE_SINCRONIZACION` | Kilometraje pendiente; puede cambiar al llegar la cola GPS. |
+| `SIN_DATOS` | Sin segmentos utilizables; no afirmar que recorrió cero. |
+| `INCOMPLETO` | Sincronización completa, pero cobertura/precisión insuficiente o especiales históricos sin calidad. |
+| `CONSOLIDADO` | Medición GPS consolidada bajo los filtros; sigue siendo una estimación. |
+
+`calidad_kilometraje={}` indica ausencia de evaluación nueva (jornada activa
+o cierre histórico, según su estado). No recalcular históricos.
+La cobertura mide qué parte del tiempo operativo tiene pares de puntos
+utilizables, no demuestra qué calle recorrió ni un porcentaje de exactitud.
+`kilometraje_disponible` conserva compatibilidad: indica segmentos utilizables
+o un especial histórico disponible; no implica calidad suficiente. Mostrar
+la calidad junto al valor. Si estaba detenido con señal suficiente, un
+kilometraje `0.000` puede ser válido.
+
+`minutos_activos` conserva su significado anterior: duración total de la
+jornada. `minutos_operativos` mide la unión de intervalos de trabajo y
+especiales sin duplicar solicitudes simultáneas; incluye esperas en operación,
+no significa tiempo exclusivamente conduciendo.
+
+El cálculo corta pares separados más de `INTERVALO_GPS_MAXIMO_SEGUNDOS`,
+filtra precisión y velocidad anómala, conserva un ancla espacial contra
+oscilaciones pequeñas y no rellena huecos mediante rutas imaginadas.
+Estos filtros también se aplican a envíos especiales. No consulta Google.
+
+### Envíos especiales y prioridad
+
+En `POST /api/v1/solicitudes/{solicitud_id}/transiciones/`, el cierre de
+`ESPECIAL` mediante `DELIVERED` o `DELIVERY_FAILED` admite `sesiones_gps`.
+Se refiere a las sesiones generadas en la jornada hasta ese cierre; no incluir
+secuencias capturadas posteriormente. Conserva el cierre con coordenadas,
+evidencia y `presentacion_ruta=SOLO_KILOMETROS`. El JSON completo de
+`movimiento_especial` añade `calidad_kilometraje`; los extremos operativos
+sin precisión conocida se reflejan en la calidad, sin inventar precisión GPS.
+
+```http
+POST /api/v1/solicitudes/{solicitud_id}/sincronizacion-gps/
+```
+
+Cuerpo `{"sesiones_gps": [...]}`. Solo el motorista propietario con
+`solicitud.actualizar_estado`, sobre un movimiento especial finalizado nuevo.
+Respuesta `200`: objeto completo `movimiento_especial` con los campos
+documentados en su detalle y `calidad_kilometraje`. `404` sin ese movimiento;
+`403` si no es el propietario; `400` para histórico o manifiesto consolidado
+diferente. Una jornada ya consolidada no permite revisar un especial y
+cambiar retrospectivamente su total. Confirmar primero los especiales y
+después la jornada. Al confirmar toda la jornada, el backend confirma también
+los prefijos pendientes de sus movimientos especiales nuevos.
+
+Mientras lleva un prioritario `PICKED_UP`, `IN_TRANSIT` o `AT_DESTINATION`,
+el backend rechaza con `400` y campo `estado_destino` la operación de otra
+solicitud ya asignada. La cancelación administrativa conserva sus permisos.
+Esto complementa el bloqueo de nuevas asignaciones.
+
+### Auditoría
+
+```http
+GET /api/v1/jornadas/{jornada_id}/kilometraje/revisiones/
+```
+
+Requiere `jornada.ver` y alcance compatible, igual que el detalle de jornada.
+Respuesta paginada `200`: `conteo`, `pagina_siguiente`, `pagina_anterior`, `resultados`.
+Cada resultado tiene exactamente `id`, `jornada_id`,
+`movimiento_especial_id` (UUID o `null`), `numero`, `motivo`, `kilometros`
+(cadena decimal), `calidad` (objeto) y `creado_en` (ISO 8601).
+Motivos actuales: `CIERRE`, `GPS_TARDIO`, `CONFIRMACION_GPS`.
+El número es por jornada o por movimiento; dos movimientos distintos pueden
+tener revisión 1. No hay endpoint de edición/borrado de revisiones.
+
+### Alcance de esta fase
+
+GPS, calidad y consolidación están implementados en ambos despliegues.
+La asignación automática continúa siendo Corporate y usa proximidad
+geográfica, no ETA vial. `mi-ruta/` sigue con `ruta_calculada=false` y orden
+provisional; quedan pendientes compatibilidad/optimización vial, ruta inicial
+Google, navegación externa y recálculos por eventos. No habilitar ni cobrar
+Google ni mostrar ETA inventada a partir de estos cambios.
+
+## Ruta inicial y navegación externa (0.27.0)
+
+Implementado en ambos despliegues, sin cambios en conexión, puertos, sesiones
+o reglas exclusivas de Analiza. No usa Waitress, Redis, tareas externas ni
+servidores adicionales. La integración requiere activación explícita del
+proveedor; actualmente sigue desactivado y sin clave real. Las pruebas son
+simuladas: no demuestran un tiempo de viaje real ni hacen consultas a Google.
+
+### Lectura de la ruta propia
+
+`GET /api/v1/rutas/mi-ruta/` conserva todos los campos existentes y añade
+`navegacion` y `ruta_vial`. Nunca llama a Google, cambia versiones ni consume
+presupuesto. Requiere motorista propio activo y `solicitud.ver_asignadas`.
+Las paradas siguen ordenadas por asignación; **no hay optimización de orden
+ni selección de motorista por ETA vial**.
+
+Ejemplo completo sin Google configurado, con las coordenadas de las
+ubicaciones ficticias de las pruebas del backend:
+
+```json
+{
+  "repartidor_id": "10000000-0000-0000-0000-000000000001",
+  "jornada_id": "20000000-0000-0000-0000-000000000001",
+  "ruta_id": "30000000-0000-0000-0000-000000000001",
+  "version_actual": 1,
+  "orden_tipo": "ASIGNACION",
+  "ruta_calculada": false,
+  "proxima_parada": {
+    "orden": 1,
+    "solicitud_id": "40000000-0000-0000-0000-000000000001",
+    "numero_solicitud": "SOL-VIAL-1",
+    "prioridad": "NORMAL",
+    "modalidad": "ENTRE_SUCURSALES",
+    "estado_solicitud": "ASSIGNED",
+    "tipo": "RECOLECCION",
+    "ubicacion": {
+      "id": "50000000-0000-0000-0000-000000000001",
+      "nombre": "Sucursal Centro",
+      "direccion": "Centro",
+      "latitud": "14.072300",
+      "longitud": "-87.192100"
+    },
+    "destino_especial": null,
+    "presentacion_ruta": "MAPA"
+  },
+  "paradas": [
+    {
+      "orden": 1,
+      "solicitud_id": "40000000-0000-0000-0000-000000000001",
+      "numero_solicitud": "SOL-VIAL-1",
+      "prioridad": "NORMAL",
+      "modalidad": "ENTRE_SUCURSALES",
+      "estado_solicitud": "ASSIGNED",
+      "tipo": "RECOLECCION",
+      "ubicacion": {
+        "id": "50000000-0000-0000-0000-000000000001",
+        "nombre": "Sucursal Centro",
+        "direccion": "Centro",
+        "latitud": "14.072300",
+        "longitud": "-87.192100"
+      },
+      "destino_especial": null,
+      "presentacion_ruta": "MAPA"
+    },
+    {
+      "orden": 2,
+      "solicitud_id": "40000000-0000-0000-0000-000000000001",
+      "numero_solicitud": "SOL-VIAL-1",
+      "prioridad": "NORMAL",
+      "modalidad": "ENTRE_SUCURSALES",
+      "estado_solicitud": "ASSIGNED",
+      "tipo": "ENTREGA",
+      "ubicacion": {
+        "id": "50000000-0000-0000-0000-000000000002",
+        "nombre": "Sucursal Norte",
+        "direccion": "Norte",
+        "latitud": "14.082300",
+        "longitud": "-87.182100"
+      },
+      "destino_especial": null,
+      "presentacion_ruta": "MAPA"
+    }
+  ],
+  "navegacion": {
+    "proveedor": "GOOGLE_MAPS",
+    "requiere_clave_api": false,
+    "solicitud_id": "40000000-0000-0000-0000-000000000001",
+    "tipo_parada": "RECOLECCION",
+    "url": "https://www.google.com/maps/dir/?api=1&destination=14.072300%2C-87.192100&travelmode=two-wheeler&dir_action=navigate"
+  },
+  "ruta_vial": {
+    "estado": "NO_CONFIGURADA",
+    "proveedor": "GOOGLE_MAPS",
+    "atribucion": null,
+    "aviso_motocicleta": "Las rutas para motocicletas están en beta y pueden omitir aceras, senderos peatonales o ciclovías. Verifica que la vía sea apta y respeta las señales.",
+    "version_actual": 1,
+    "version_calculada": null,
+    "polilinea_codificada": null,
+    "incluye_tramos_completados": false,
+    "calculada_en": null,
+    "expira_en": null,
+    "origen_gps": null,
+    "codigo_error": null,
+    "reintento_desde": null,
+    "metricas_en_respuesta": false,
+    "distancia_estimada_metros": null,
+    "duracion_estimada_segundos": null
+  }
+}
+```
+
+`navegacion` es `null` cuando no hay paradas o la próxima es un especial
+(`SOLO_KILOMETROS`), incluso su recolección. No contiene clave ni un origen
+congelado: Google Maps utiliza la ubicación actual del teléfono. El frontend
+debe abrir el enlace en la aplicación/navegador externo, mantener la cola GPS
+y actualizar `mi-ruta/` al volver. Abrir o cerrar Maps **no** inicia, recoge,
+entrega ni finaliza una solicitud: esos cambios siguen usando transiciones
+y evidencias de VitaGo. La navegación externa puede sugerir/recalcular su
+propia ruta; no se controla ni factura mediante este cliente de Routes API.
+
+### Cálculo inicial explícito
+
+```http
+POST /api/v1/rutas/mi-ruta/calcular/
+Authorization: Bearer <token_acceso>
+Content-Type: application/json
+```
+
+```json
+{"version_actual": 1, "reintentar": false}
+```
+
+`version_actual` es obligatorio, entero positivo tomado de `mi-ruta/`;
+`reintentar` es opcional, por defecto `false`. No admite campos adicionales,
+origen arbitrario, clave API, empresa o motorista enviado por Flutter. El
+propietario requiere además `ruta.calcular`, concedido a los dos roles de
+motorista mediante migración. No ofrece cálculo de rutas ajenas al administrador.
+
+Origen: GPS vigente y preciso recibido por el backend en jornada activa,
+igual que los filtros de asignación. Destinos: hasta diez paradas propias,
+en el orden operativo existente. Agrupa coordenadas consecutivas idénticas
+para la consulta, sin borrar las paradas operativas. Al encontrar un especial
+detiene el trazado: calcula solo el prefijo con mapa anterior, si existe.
+Un prioritario detiene el trazado tras su entrega; si ya está recogido, va
+directamente a esa entrega. Nunca ubica un destino especial en el mapa.
+
+Usa Routes API `Compute Routes`, `TWO_WHEELER`, `TRAFFIC_AWARE`, sin rutas
+alternativas ni optimización de paradas; máscara limitada a distancia,
+duración y geometría. Google admite rutas de dos ruedas en
+[Honduras](https://developers.google.com/maps/documentation/routes/coverage-two-wheeled?utm_campaign=gmp_git_agentskills_v1).
+Si el proveedor no puede trazar, devuelve un error explícito; no sustituye
+silenciosamente por una ruta para automóvil.
+
+Respuesta `200`: **el objeto `ruta_vial`**, no el objeto completo de `mi-ruta/`:
+
+```json
+{
+  "estado": "CALCULADA",
+  "proveedor": "GOOGLE_MAPS",
+  "atribucion": "Google Maps",
+  "aviso_motocicleta": "Las rutas para motocicletas están en beta y pueden omitir aceras, senderos peatonales o ciclovías. Verifica que la vía sea apta y respeta las señales.",
+  "version_actual": 1,
+  "version_calculada": 1,
+  "polilinea_codificada": "_p~iF~ps|U_ulLnnqC_mqNvxq`@",
+  "incluye_tramos_completados": false,
+  "calculada_en": "2026-10-13T15:00:00Z",
+  "expira_en": "2026-10-14T15:00:00Z",
+  "origen_gps": {
+    "latitud": "14.072000",
+    "longitud": "-87.192000",
+    "registrada_en": "2026-10-13T14:59:55+00:00",
+    "precision_metros": "5.00"
+  },
+  "codigo_error": "",
+  "reintento_desde": null,
+  "metricas_en_respuesta": true,
+  "distancia_estimada_metros": 1800,
+  "duracion_estimada_segundos": 250.5
+}
+```
+
+Polilínea y métricas de este ejemplo son la **respuesta simulada del test**,
+no una ruta real entre las ubicaciones ficticias. El frontend debe dibujar
+geometría de Google únicamente sobre un mapa de Google, mostrar atribución
+«Google Maps» junto a sus resultados y el aviso beta. Las cifras son
+estimaciones de todo el trazado inicial, **no kilómetros realizados ni una
+ETA en vivo a la próxima parada**. No restar tramos GPS de esa duración
+para inventar una ETA; no utilizarla para informes históricos de recorrido.
+
+### Reutilización y consumo
+
+Repetir el POST devuelve el trazado vigente sin otra llamada. Completar
+paradas reutiliza el cálculo cuando las restantes son un sufijo del itinerario
+original: `version_calculada` puede ser menor que `version_actual`, y
+`incluye_tramos_completados=true` advierte que la línea conserva tramos ya
+terminados. El frontend no debe presentarla como posición GPS en vivo.
+
+Agregar, reordenar, editar coordenadas o cancelar una parada intermedia puede
+invalidar la reutilización: requiere otro POST **explícito** con versión vigente.
+No hay cálculos automáticos al consultar, asignar, completar una parada,
+desviarse de la ruta, recibir GPS o cerrar jornada. Si termina todo el
+itinerario, `SIN_PARADAS`; no se consulta Google para calcular el kilometraje final.
+
+Se reserva un intento por versión, máximo dos por defecto con reintento
+explícito. Bloquea al motorista durante reserva y publicación, pero no durante
+HTTP; un cálculo en curso evita duplicados concurrentes de ese motorista.
+Si cambió el itinerario mientras Google respondía, descarta la respuesta.
+Los límites por base/despliegue son 50 intentos diarios y 500 mensuales:
+incluyen fallos/timeouts y se reservan transaccionalmente, sin devolver cuotas
+cuando no sabemos si el proveedor facturó. El cambio de día/mes utiliza la
+zona horaria del backend. **No equivalen a una garantía de costo cero**:
+otras apps/bases pueden compartir el proyecto de Cloud. Configurar también
+cuotas del proveedor; una alerta de presupuesto de Cloud no corta el gasto.
+
+### Persistencia y caducidad
+
+El backend no guarda distancia/duración de Google ni cuerpos crudos.
+`metricas_en_respuesta=true` solo en la respuesta de un cálculo nuevo exitoso;
+en GET o POST reutilizado será `false` y ambas métricas serán `null`.
+Mostrar estimaciones solo mientras se usa esa respuesta, sin caché persistente
+de métricas en la app. No repetir POST para intentar recuperar las métricas.
+
+Guarda temporalmente solo coordenadas de la línea codificada, con caducidad
+de visualización de 24 horas (configurable de 1 a 24). Interpretamos esa
+geometría como coordenadas latitud/longitud bajo la excepción de caché
+[Routes API, sección 19.3](https://cloud.google.com/maps-platform/terms/maps-service-terms?utm_campaign=gmp_git_agentskills_v1);
+no extiende esa excepción a otros campos. Revalidar los términos de la cuenta
+antes de activar, especialmente si su dirección de facturación es europea.
+El cálculo vencido no se devuelve ni se recalcula en la misma versión.
+El historial propio de paradas, GPS de origen y contadores de intentos permanece.
+
+Antes de habilitar Google, programar al menos diariamente (preferible cada
+hora) en **cada despliegue**:
+
+```powershell
+.\.venv\Scripts\python.exe manage.py limpiar_rutas_google_vencidas
+```
+
+Corporate requiere `ARCHIVO_ENTORNO_ADICIONAL=.env.corporativo`, como su
+servidor. El comando elimina solo geometría vencida, conservando auditoría y
+datos propios; no borra solicitudes ni GPS. El POST también limpia geometría
+vencida. **No hay tarea automática instalada**: se debe programar antes de
+activación. Respaldos/exportaciones no deben conservar contenido de Google
+fuera del plazo permitido; excluir esas geometrías o controlar su caducidad.
+
+### Estados y errores exactos
+
+`ruta_vial.estado`: `SIN_PARADAS`, `SOLO_KILOMETROS`, `NO_CONFIGURADA`,
+`PENDIENTE`, `CALCULANDO`, `CALCULADA`, `FALLIDA`, `VENCIDA`,
+`ITINERARIO_CAMBIO`. Un intento interrumpido durante más de 60 segundos se
+presenta como `FALLIDA`, `codigo_error=INTENTO_INTERRUPPIDO` sin escrituras
+en GET. Recuperarlo consume otro intento y requiere `reintentar=true`.
+
+Errores de entrada `400` conservan nombres `version_actual`, `reintentar` o
+el campo desconocido. Errores operativos del POST:
+
+```json
+{"codigo": "GPS_NO_VIGENTE", "detail": "Inicia la jornada y envía una posición GPS reciente y precisa antes de calcular."}
+```
+
+| HTTP | `codigo` | Acción del frontend |
+|---|---|---|
+| 409 | `VERSION_DESACTUALIZADA` / `ITINERARIO_CAMBIO` | Actualizar GET; no reintentar de forma automática. |
+| 409 | `GPS_NO_VIGENTE` | Iniciar jornada y enviar GPS reciente/preciso. |
+| 409 | `SIN_PARADAS_CARTOGRAFIABLES` | Sin mapa; continuar flujo operativo o especial. |
+| 409 | `CALCULO_EN_CURSO` | Consultar GET; no duplicar POST. |
+| 409 | `REINTENTO_EXPLICITO_REQUERIDO` | Consultar `reintento_desde` y ofrecer reintento explícito. |
+| 409 | `LIMITE_INTENTOS` / `FALLA_NO_REINTENTABLE` / `RUTA_VENCIDA` | No seguir intentando la misma versión; navegación externa sigue disponible. |
+| 409 | `INTENTO_REEMPLAZADO` | Consultar estado actual. |
+| 429 | `LIMITE_CONSUMO` / `ESPERAR_REINTENTO` | No repetir hasta nuevo período o fecha permitida. |
+| 503 | `GOOGLE_NO_CONFIGURADO` | No llamar de nuevo; navegación externa no requiere clave. |
+| 503 | `CONEXION_GOOGLE` / `CUOTA_GOOGLE` / `FALLA_GOOGLE` | GET para consultar si hay fecha de reintento; no retry automático. |
+| 503 | `CONFIGURACION_GOOGLE` / `SIN_RUTA` / `RESPUESTA_INVALIDA` / `COORDENADAS_INVALIDAS` / `PARADAS_INVALIDAS` | No retry automático; revisar configuración/itinerario. |
+
+`401` sin sesión; `403` sin permiso; `404` sin motorista propio activo.
+Solo fallos transitorios (`CONEXION_GOOGLE`, `CUOTA_GOOGLE` o error HTTP 5xx)
+habilitan reintento tras 30 segundos en el primer fallo, o 60 en el segundo.
+El límite de intentos se verifica igualmente. No devolver mensajes upstream,
+claves API ni coordenadas en logs. Un fallo de proveedor no debe convertirse
+en «no se pudo conectar con VitaGo» si Django sí respondió HTTP.
+
+### Configuración y tareas del frontend
+
+Variables en las plantillas `.env.example` y `.env.corporativo.example`:
+`CLAVE_API_GOOGLE_MAPS`, `HABILITAR_RUTAS_GOOGLE=false`,
+`RUTAS_GOOGLE_TIMEOUT_SEGUNDOS=5` (timeout de red, máximo 10),
+`RUTAS_GOOGLE_LIMITE_DIARIO=50`, `RUTAS_GOOGLE_LIMITE_MENSUAL=500`,
+`RUTAS_GOOGLE_INTENTOS_POR_VERSION=2`, `RUTAS_GOOGLE_CACHE_HORAS=24`.
+El máximo de intentos por versión admite solamente 1 o 2.
+La clave y bandera de Corporate deben sobrescribirse en `.env.corporativo`
+para no heredarlas accidentalmente de Network. No compartir claves en chat
+ni incluirlas en Flutter, respuestas o Git. Activar solo Routes API con
+una clave de backend restringida por API e IP pública de salida; una clave
+móvil, si luego se usa un SDK, será distinta y restringida por paquete/firma.
+
+Antes del piloto, la app debe obtener consentimiento explícito y revocable
+para ubicación/segundo plano, mostrar su uso y actualizar sus términos y
+privacidad para integrar Google Maps. Google recibe solo coordenadas:
+no enviar pacientes, nombres de usuario, artículos, documentos, evidencias
+ni datos clínicos. Esta función es logística normal, no navegación de
+emergencias ni un sistema crítico. Revisar requisitos de la cuenta/región
+antes de activación: la revisión técnica no sustituye asesoría legal.
+
+La [Maps Demo Key](https://mapsplatform.google.com/maps-demo-key?utm_campaign=gmp_git_agentskills_v1)
+permite prototipos sin proyecto/facturación propios: iniciar sesión con Google,
+aceptar términos del proyecto demo y generar clave. Guardarla localmente en
+la variable indicada; tiene límites diarios, no sirve para producción ni
+garantiza acceso a todos los parámetros. Para producción revisar facturación,
+cuotas, [restricciones de claves](https://docs.cloud.google.com/api-keys/docs/add-restrictions-api-keys)
+y [términos](https://cloud.google.com/maps-platform/terms?utm_campaign=gmp_git_agentskills_v1).
+
+Frontend debe consumir los campos nuevos, abrir `navegacion.url`, mostrar
+estado/atribución/aviso beta, iniciar cálculo solo cuando se habilite y se
+solicite explícitamente, y mantener GPS/cola al abrir Maps o apagar pantalla.
+No se modificó código frontend. Google inicial está listo para configurar;
+ETA en vivo, compatibilidad vial en asignación, optimización de orden,
+Navigation SDK, Roads API y recálculos automáticos siguen fuera de esta fase.

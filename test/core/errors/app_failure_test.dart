@@ -56,6 +56,27 @@ void main() {
     expect(failure.message, contains('cotización'));
   });
 
+  test('conserva código y detalle cuando Django responde 503', () {
+    final failure = AppFailure.fromDio(
+      DioException(
+        requestOptions: RequestOptions(path: '/rutas/mi-ruta/calcular/'),
+        response: Response<Map<String, dynamic>>(
+          requestOptions: RequestOptions(path: '/rutas/mi-ruta/calcular/'),
+          statusCode: 503,
+          data: {
+            'codigo': 'GOOGLE_NO_CONFIGURADO',
+            'detail': 'El proveedor de rutas no está configurado.',
+          },
+        ),
+      ),
+    );
+
+    expect(failure.statusCode, 503);
+    expect(failure.serverCode, 'GOOGLE_NO_CONFIGURADO');
+    expect(failure.message, 'El proveedor de rutas no está configurado.');
+    expect(failure.fieldErrors, isEmpty);
+  });
+
   test('expone errores simples y anidados junto a su campo', () {
     final failure = AppFailure.fromDio(
       DioException(

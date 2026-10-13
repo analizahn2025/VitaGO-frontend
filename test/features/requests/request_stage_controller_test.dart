@@ -9,6 +9,8 @@ import 'package:vitago_app/features/requests/models/request_models.dart';
 import 'package:vitago_app/features/requests/repositories/requests_repository.dart';
 import 'package:vitago_app/features/tracking/models/tracking_point.dart';
 import 'package:vitago_app/features/tracking/repositories/tracking_repository.dart';
+import 'package:vitago_app/features/tracking/services/tracking_queue_coordinator.dart';
+import 'package:vitago_app/features/tracking/storage/tracking_queue_store.dart';
 
 void main() {
   final location = DeviceLocation(
@@ -31,7 +33,7 @@ void main() {
     final controller = RequestStageActionsController(
       evidenceRepository,
       requestsRepository,
-      _TrackingRepository(),
+      _trackingCoordinator(),
     );
     final input = EvidenceUploadInput(
       filePath: 'foto.jpg',
@@ -61,7 +63,7 @@ void main() {
     final controller = RequestStageActionsController(
       evidenceRepository,
       _RequestsRepository(),
-      _TrackingRepository(),
+      _trackingCoordinator(),
     );
 
     await expectLater(
@@ -91,14 +93,13 @@ void main() {
       final controller = RequestStageActionsController(
         _EvidenceRepository(response: _evidence('FOTO_RECOLECCION')),
         requestsRepository,
-        _TrackingRepository(),
+        _trackingCoordinator(),
       );
 
       final updated = await controller.completeTransition(
         request: _request('AT_PICKUP'),
         targetStatus: 'PICKED_UP',
         location: location,
-        trackingClientId: 'tracking-id',
       );
 
       expect(updated.status, 'PICKED_UP');
@@ -115,7 +116,7 @@ void main() {
     final controller = RequestStageActionsController(
       _EvidenceRepository(response: _evidence('FOTO_ENTREGA')),
       requestsRepository,
-      _TrackingRepository(),
+      _trackingCoordinator(),
     );
 
     await expectLater(
@@ -123,7 +124,6 @@ void main() {
         request: _request('AT_DESTINATION'),
         targetStatus: 'DELIVERED',
         location: location,
-        trackingClientId: 'tracking-id',
       ),
       throwsA(
         isA<AppFailure>().having(
@@ -134,11 +134,35 @@ void main() {
       ),
     );
   });
+
+  test(
+    'cierra un especial con manifiesto aunque el lote quede pendiente',
+    () async {
+      final requestsRepository = _RequestsRepository();
+      final store = _RecordingTrackingQueueStore();
+      final controller = RequestStageActionsController(
+        _EvidenceRepository(response: _evidence('FOTO_ENTREGA')),
+        requestsRepository,
+        TrackingQueueCoordinator(store, _FailingTrackingRepository()),
+      );
+
+      final updated = await controller.completeTransition(
+        request: _request('AT_DESTINATION', special: true),
+        targetStatus: 'DELIVERED',
+        location: location,
+      );
+
+      expect(updated.status, 'DELIVERED');
+      expect(requestsRepository.lastInput?.gpsSessions, hasLength(1));
+      expect(requestsRepository.lastInput?.gpsSessions?.single.lastSequence, 1);
+      expect(await store.pendingCount('shift-id'), 1);
+    },
+  );
 }
 
 final _recordedAt = DateTime.utc(2026, 9, 30, 15);
 
-ServiceRequestDetail _request(String status) {
+ServiceRequestDetail _request(String status, {bool special = false}) {
   return ServiceRequestDetail(
     summary: ServiceRequestSummary(
       id: 'request-id',
@@ -147,7 +171,9 @@ ServiceRequestDetail _request(String status) {
       requestedById: 'requester-id',
       assignedDriverId: 'driver-id',
       priority: 'NORMAL',
-      modality: RequestModalities.betweenBranches,
+      modality: special
+          ? RequestModalities.special
+          : RequestModalities.betweenBranches,
       serviceType: const RequestServiceType(
         id: 'service-id',
         code: 'MEDICAMENTOS',
@@ -170,6 +196,17 @@ ServiceRequestDetail _request(String status) {
     items: const [],
     events: const [],
     assignments: const [],
+    specialMovement: special
+        ? SpecialRequestMovement(
+            id: 'movement-id',
+            driverId: 'driver-id',
+            shiftId: 'shift-id',
+            status: 'ACTIVO',
+            startedAt: _recordedAt,
+            recordsConsidered: 0,
+            recordsDiscarded: 0,
+          )
+        : null,
     updatedAt: _recordedAt,
   );
 }
@@ -246,4 +283,72 @@ class _TrackingRepository implements TrackingRepository {
 
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+TrackingQueueCoordinator _trackingCoordinator() =>
+    TrackingQueueCoordinator(_TrackingQueueStore(), _TrackingRepository());
+
+class _TrackingQueueStore implements TrackingQueueStore {
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+class _FailingTrackingRepository extends _TrackingRepository {
+  @override
+  Future<TrackingBatchResult> registerPoints(TrackingBatchInput input) {
+    throw const AppFailure(message: 'Sin conexión temporal.');
+  }
+}
+
+class _RecordingTrackingQueueStore implements TrackingQueueStore {
+  final _points = <String, List<TrackingPointInput>>{};
+
+  @override
+  Future<TrackingPointInput> enqueue(
+    String shiftId,
+    TrackingPointInput point,
+  ) async {
+    final queued = TrackingPointInput(
+      clientId: point.clientId,
+      latitude: point.latitude,
+      longitude: point.longitude,
+      recordedAt: point.recordedAt,
+      gpsSession: 'session-1',
+      sequence: 1,
+    );
+    _points.putIfAbsent(shiftId, () => []).add(queued);
+    return queued;
+  }
+
+  @override
+  Future<List<TrackingPointInput>> pendingPoints(
+    String shiftId,
+    int limit,
+  ) async {
+    return (_points[shiftId] ?? const []).take(limit).toList();
+  }
+
+  @override
+  Future<void> acknowledge(String shiftId, Iterable<String> clientIds) async {
+    _points[shiftId]?.removeWhere(
+      (point) => clientIds.contains(point.clientId),
+    );
+  }
+
+  @override
+  Future<List<GpsSessionManifest>> manifest(String shiftId) async => const [
+    GpsSessionManifest(gpsSession: 'session-1', lastSequence: 1),
+  ];
+
+  @override
+  Future<int> pendingCount(String shiftId) async =>
+      _points[shiftId]?.length ?? 0;
+
+  @override
+  Future<List<String>> shiftsWithPendingPoints() async => _points.keys.toList();
+
+  @override
+  Future<void> clearShift(String shiftId) async {
+    _points.remove(shiftId);
+  }
 }

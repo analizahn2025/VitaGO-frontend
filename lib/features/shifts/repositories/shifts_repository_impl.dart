@@ -2,6 +2,7 @@ import 'package:vitago_app/core/models/paginated_result.dart';
 import 'package:vitago_app/features/shifts/models/driver_shift.dart';
 import 'package:vitago_app/features/shifts/repositories/shifts_repository.dart';
 import 'package:vitago_app/features/shifts/services/shifts_api_service.dart';
+import 'package:vitago_app/features/tracking/models/tracking_point.dart';
 
 class ShiftsRepositoryImpl implements ShiftsRepository {
   const ShiftsRepositoryImpl(this._apiService);
@@ -27,4 +28,15 @@ class ShiftsRepositoryImpl implements ShiftsRepository {
     String shiftId,
     ShiftCoordinatesInput input,
   ) => _apiService.finishShift(shiftId, input);
+
+  @override
+  Future<DriverShift> confirmGpsSynchronization(
+    String shiftId,
+    List<GpsSessionManifest> sessions,
+  ) => _apiService.confirmGpsSynchronization(shiftId, sessions);
+
+  @override
+  Future<PaginatedResult<MileageRevision>> getMileageRevisions(
+    String shiftId,
+  ) => _apiService.getMileageRevisions(shiftId);
 }

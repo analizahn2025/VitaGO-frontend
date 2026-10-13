@@ -2,11 +2,27 @@ import 'package:dio/dio.dart';
 import 'package:vitago_app/core/errors/app_failure.dart';
 import 'package:vitago_app/core/network/api_client.dart';
 import 'package:vitago_app/features/tracking/models/tracking_point.dart';
+import 'package:vitago_app/features/tracking/models/tracking_configuration.dart';
 
 class TrackingApiService {
   const TrackingApiService(this._apiClient);
 
   final ApiClient _apiClient;
+
+  Future<TrackingConfiguration> getConfiguration() async {
+    try {
+      final response = await _apiClient.get<Map<String, dynamic>>(
+        'seguimiento/configuracion/',
+      );
+      return TrackingConfiguration.fromJson(_requiredData(response.data));
+    } on DioException catch (error) {
+      throw AppFailure.fromDio(error);
+    } on FormatException {
+      throw const AppFailure(
+        message: 'La configuración GPS no tiene el formato esperado.',
+      );
+    }
+  }
 
   Future<TrackingBatchResult> registerPoints(TrackingBatchInput input) async {
     try {

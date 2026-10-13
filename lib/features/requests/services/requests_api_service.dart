@@ -176,6 +176,25 @@ class RequestsApiService {
     }
   }
 
+  Future<SpecialRequestMovement> confirmGpsSynchronization(
+    String requestId,
+    GpsSynchronizationInput input,
+  ) async {
+    try {
+      final response = await _apiClient.post<Map<String, dynamic>>(
+        'solicitudes/$requestId/sincronizacion-gps/',
+        data: input.toJson(),
+      );
+      return SpecialRequestMovement.fromJson(_requiredData(response.data));
+    } on DioException catch (error) {
+      throw AppFailure.fromDio(error);
+    } on FormatException {
+      throw const AppFailure(
+        message: 'La confirmación GPS del envío no tiene el formato esperado.',
+      );
+    }
+  }
+
   Map<String, dynamic> _requiredData(Map<String, dynamic>? data) {
     if (data == null) throw const FormatException('Respuesta vacía.');
     return data;

@@ -17,6 +17,9 @@ void main() {
       expect(shift.completedServices, 3);
       expect(shift.reportedIncidents, 1);
       expect(shift.incidentsAvailable, isTrue);
+      expect(shift.operationalMinutes, 75);
+      expect(shift.mileageQuality?.status, 'CONSOLIDADO');
+      expect(shift.mileageQuality?.synchronizationVerified, isTrue);
       expect(shift.finishedAt, isNull);
     });
 
@@ -26,8 +29,17 @@ void main() {
         const ShiftCoordinatesInput(
           latitude: '14.072300',
           longitude: '-87.192100',
+          gpsSessions: [
+            GpsSessionManifest(gpsSession: 'session-id', lastSequence: 3),
+          ],
         ).toJson(),
-        {'latitud': '14.072300', 'longitud': '-87.192100'},
+        {
+          'latitud': '14.072300',
+          'longitud': '-87.192100',
+          'sesiones_gps': [
+            {'sesion_gps': 'session-id', 'ultima_secuencia': 3},
+          ],
+        },
       );
     });
 
@@ -60,6 +72,8 @@ void main() {
         speedMetersPerSecond: '4.250',
         headingDegrees: '180.00',
         recordedAt: DateTime.parse('2026-09-26T15:10:00Z'),
+        gpsSession: 'session-id',
+        sequence: 1,
       );
 
       final json = TrackingBatchInput(
@@ -71,6 +85,8 @@ void main() {
       expect(json['jornada_id'], 'shift-id');
       expect(record['id_cliente'], 'client-id');
       expect(record['registrada_en'], '2026-09-26T15:10:00.000Z');
+      expect(record['sesion_gps'], 'session-id');
+      expect(record['secuencia'], 1);
       expect(record.containsKey('es_operativo'), isFalse);
     });
 
@@ -198,6 +214,28 @@ Map<String, dynamic> _shiftJson() => {
   'servicios_normales': 2,
   'servicios_prioritarios': 1,
   'minutos_activos': 90,
+  'minutos_operativos': 75,
+  'calidad_kilometraje': {
+    'estado': 'CONSOLIDADO',
+    'metodo': 'GPS_FILTRADO',
+    'sincronizacion_verificada': true,
+    'puntos_pendientes': 0,
+    'sesiones_gps': [
+      {'sesion_gps': 'session-id', 'ultima_secuencia': 3},
+    ],
+    'puntos_considerados': 3,
+    'puntos_descartados': 0,
+    'puntos_sin_precision': 0,
+    'segmentos_validos': 2,
+    'huecos_detectados': 0,
+    'segundos_cubiertos': 4500.0,
+    'segundos_operativos': 4500.0,
+    'especiales_sin_calidad': 0,
+    'movimientos_pendientes': 0,
+    'cobertura_porcentaje': 100.0,
+    'revision': 1,
+    'actualizada_en': '2026-09-26T16:00:00Z',
+  },
   'incidencias_reportadas': 1,
   'incidencias_disponibles': true,
   'creado_en': '2026-09-26T14:30:00Z',

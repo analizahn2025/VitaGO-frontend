@@ -4,18 +4,23 @@ class AppFailure implements Exception {
   const AppFailure({
     required this.message,
     this.statusCode,
+    this.serverCode,
     this.fieldErrors = const {},
   });
 
   factory AppFailure.fromDio(DioException error) {
     final statusCode = error.response?.statusCode;
     final data = error.response?.data;
+    final serverCode = _readCode(data);
     final fieldErrors = _readFieldErrors(data);
 
     if (statusCode != null && statusCode >= 500) {
       return AppFailure(
-        message: 'Ocurrió un error en el servicio. Inténtalo nuevamente.',
+        message:
+            _readDetail(data) ??
+            'Ocurrió un error en el servicio. Inténtalo nuevamente.',
         statusCode: statusCode,
+        serverCode: serverCode,
       );
     }
 
@@ -47,6 +52,7 @@ class AppFailure implements Exception {
             _readDetail(data) ??
             'La operación entra en conflicto con el estado actual.',
         statusCode: 409,
+        serverCode: serverCode,
       );
     }
 
@@ -54,13 +60,18 @@ class AppFailure implements Exception {
       return AppFailure(
         message: 'Revisa los datos ingresados.',
         statusCode: statusCode,
+        serverCode: serverCode,
         fieldErrors: fieldErrors,
       );
     }
 
     final detail = _readDetail(data);
     if (detail != null) {
-      return AppFailure(message: detail, statusCode: statusCode);
+      return AppFailure(
+        message: detail,
+        statusCode: statusCode,
+        serverCode: serverCode,
+      );
     }
 
     if (error.type == DioExceptionType.receiveTimeout) {
@@ -81,11 +92,13 @@ class AppFailure implements Exception {
     return AppFailure(
       message: 'No fue posible completar la operación.',
       statusCode: statusCode,
+      serverCode: serverCode,
     );
   }
 
   final String message;
   final int? statusCode;
+  final String? serverCode;
   final Map<String, List<String>> fieldErrors;
 
   bool get isUnauthorized => statusCode == 401;
@@ -95,6 +108,8 @@ class AppFailure implements Exception {
   bool get isNotFound => statusCode == 404;
 
   bool get isConflict => statusCode == 409;
+
+  bool get isRateLimited => statusCode == 429;
 
   String? fieldMessage(String key, [String? alternativeKey]) {
     final messages =
@@ -111,6 +126,14 @@ class AppFailure implements Exception {
     return null;
   }
 
+  static String? _readCode(Object? data) {
+    if (data case {'codigo': final Object code}) {
+      final text = code.toString().trim();
+      return text.isEmpty ? null : text;
+    }
+    return null;
+  }
+
   static Map<String, List<String>> _readFieldErrors(Object? data) {
     if (data is! Map) {
       return const {};
@@ -118,7 +141,7 @@ class AppFailure implements Exception {
 
     final result = <String, List<String>>{};
     for (final entry in data.entries) {
-      if (entry.key == 'detail') {
+      if (entry.key == 'detail' || entry.key == 'codigo') {
         continue;
       }
 

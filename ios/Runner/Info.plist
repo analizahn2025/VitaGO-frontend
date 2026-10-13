@@ -55,6 +55,12 @@
 	<string>Main</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>VitaGo usa tu ubicación durante la jornada para registrar el seguimiento operativo y las evidencias.</string>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>VitaGo mantiene el seguimiento de tu jornada aunque abras otra aplicación o apagues la pantalla.</string>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>location</string>
+	</array>
 	<key>NSCameraUsageDescription</key>
 	<string>VitaGo usa la cámara para registrar evidencias de recolección, entrega e incidencias.</string>
 	<key>NSPhotoLibraryUsageDescription</key>

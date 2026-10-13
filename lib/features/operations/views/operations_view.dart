@@ -17,12 +17,15 @@ import 'package:vitago_app/features/operations/controllers/driver_delivery_contr
 import 'package:vitago_app/features/operations/models/driver_delivery_board.dart';
 import 'package:vitago_app/features/operations/widgets/driver_requests_section.dart';
 import 'package:vitago_app/features/profile/models/user_profile.dart';
+import 'package:vitago_app/features/routes/providers/routes_providers.dart';
+import 'package:vitago_app/features/routes/widgets/driver_route_section.dart';
 import 'package:vitago_app/features/shifts/controllers/shifts_controller.dart';
 import 'package:vitago_app/features/shifts/models/driver_shift.dart';
 import 'package:vitago_app/features/shifts/views/shift_detail_view.dart';
 import 'package:vitago_app/features/tracking/controllers/driver_tracking_status_controller.dart';
 import 'package:vitago_app/features/tracking/providers/tracking_providers.dart';
 import 'package:vitago_app/features/tracking/widgets/required_gps_body.dart';
+import 'package:vitago_app/features/tracking/models/tracking_configuration.dart';
 
 class OperationsView extends ConsumerStatefulWidget {
   const OperationsView({
@@ -226,6 +229,11 @@ class _OperationsViewState extends ConsumerState<OperationsView>
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        DriverRouteSection(
+          canCalculate: widget.profile.can(AppPermissions.calculateRoute),
+          onOpenRequest: _openRequest,
+        ),
+        const SizedBox(height: AppSpacing.lg),
         _buildDriverRequests(deliveryBoard),
         if (widget.profile.can(AppPermissions.registerDriverLocation)) ...[
           const SizedBox(height: AppSpacing.lg),
@@ -277,6 +285,7 @@ class _OperationsViewState extends ConsumerState<OperationsView>
     ref.invalidate(ownDriverProfileControllerProvider);
     ref.invalidate(driverNotificationsControllerProvider);
     ref.invalidate(unreadNotificationCountControllerProvider);
+    ref.invalidate(myRouteProvider);
     try {
       await Future.wait([
         ref.read(activeShiftControllerProvider.future),
@@ -297,26 +306,44 @@ class _OperationsViewState extends ConsumerState<OperationsView>
     ref.invalidate(activeShiftControllerProvider);
     ref.invalidate(driverNotificationsControllerProvider);
     ref.invalidate(unreadNotificationCountControllerProvider);
-  }
-
-  Future<ShiftCoordinatesInput> _currentCoordinates() async {
-    final location = await ref
-        .read(deviceLocationServiceProvider)
-        .getCurrentLocation();
-    return ShiftCoordinatesInput(
-      latitude: location.latitudeText,
-      longitude: location.longitudeText,
-    );
+    ref.invalidate(myRouteProvider);
   }
 
   Future<void> _startShift() async {
+    final accepted = await _confirmBackgroundTracking();
+    if (!accepted || !mounted) return;
     setState(() {
       _busy = true;
       _error = null;
     });
     try {
-      final input = await _currentCoordinates();
-      await ref.read(shiftActionsControllerProvider).start(input);
+      final location = await ref
+          .read(deviceLocationServiceProvider)
+          .getCurrentLocation();
+      final started = await ref
+          .read(shiftActionsControllerProvider)
+          .start(
+            ShiftCoordinatesInput(
+              latitude: location.latitudeText,
+              longitude: location.longitudeText,
+            ),
+          );
+      final configuration = await _trackingConfiguration();
+      final coordinator = ref.read(trackingQueueCoordinatorProvider);
+      await coordinator.capture(started.id, location);
+      try {
+        await coordinator.flush(
+          started.id,
+          maximumBatchSize: configuration.maximumBatchSize,
+        );
+      } on AppFailure catch (failure) {
+        if (mounted) {
+          setState(() {
+            _error =
+                'La jornada inició. El GPS quedó guardado y se reenviará automáticamente. ${failure.message}';
+          });
+        }
+      }
       ref.invalidate(activeShiftControllerProvider);
       ref.invalidate(driverDeliveryControllerProvider);
       ref.invalidate(ownDriverProfileControllerProvider);
@@ -325,6 +352,30 @@ class _OperationsViewState extends ConsumerState<OperationsView>
     } finally {
       if (mounted) setState(() => _busy = false);
     }
+  }
+
+  Future<bool> _confirmBackgroundTracking() async {
+    return await showDialog<bool>(
+          context: context,
+          builder: (context) => AlertDialog(
+            icon: const Icon(Icons.my_location_outlined),
+            title: const Text('Ubicación durante la jornada'),
+            content: const Text(
+              'VitaGo registrará tu ubicación mientras la jornada esté activa, incluso al abrir Maps o apagar la pantalla. Si no hay internet, los puntos se guardarán de forma privada en el teléfono para enviarlos después. Puedes revocar el permiso desde los ajustes del dispositivo, pero no podrás continuar la operación con el GPS apagado.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(false),
+                child: const Text('Ahora no'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.of(context).pop(true),
+                child: const Text('Aceptar e iniciar'),
+              ),
+            ],
+          ),
+        ) ??
+        false;
   }
 
   Future<void> _confirmFinish(String shiftId) async {
@@ -356,10 +407,35 @@ class _OperationsViewState extends ConsumerState<OperationsView>
       _error = null;
     });
     try {
-      final input = await _currentCoordinates();
+      final location = await ref
+          .read(deviceLocationServiceProvider)
+          .getCurrentLocation();
+      final configuration = await _trackingConfiguration();
+      final coordinator = ref.read(trackingQueueCoordinatorProvider);
+      await coordinator.capture(shiftId, location);
+      try {
+        await coordinator.flush(
+          shiftId,
+          maximumBatchSize: configuration.maximumBatchSize,
+        );
+      } on AppFailure {
+        // El cierre operativo no depende de que la cola alcance al servidor
+        // en este instante. El manifiesto declara también esos puntos.
+      }
+      final manifest = await coordinator.manifest(shiftId);
       final finished = await ref
           .read(shiftActionsControllerProvider)
-          .finish(shiftId, input);
+          .finish(
+            shiftId,
+            ShiftCoordinatesInput(
+              latitude: location.latitudeText,
+              longitude: location.longitudeText,
+              gpsSessions: manifest,
+            ),
+          );
+      if (finished.mileageQuality?.synchronizationVerified == true) {
+        await coordinator.clearShift(shiftId);
+      }
       ref.invalidate(activeShiftControllerProvider);
       ref.invalidate(driverDeliveryControllerProvider);
       ref.invalidate(ownDriverProfileControllerProvider);
@@ -374,6 +450,14 @@ class _OperationsViewState extends ConsumerState<OperationsView>
       if (mounted) setState(() => _error = failure.message);
     } finally {
       if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<TrackingConfiguration> _trackingConfiguration() async {
+    try {
+      return await ref.read(trackingConfigurationProvider.future);
+    } on Object {
+      return TrackingConfiguration.defaults;
     }
   }
 
@@ -422,6 +506,8 @@ class _AutomaticTrackingStatus extends StatelessWidget {
                   Text(
                     status.error != null
                         ? status.error!
+                        : status.pendingPoints > 0
+                        ? '${status.pendingPoints} punto${status.pendingPoints == 1 ? '' : 's'} pendiente${status.pendingPoints == 1 ? '' : 's'} de envío.'
                         : status.lastSyncedAt == null
                         ? 'El seguimiento comienza automáticamente.'
                         : 'Último envío: ${AppDateFormat.dateTime(status.lastSyncedAt!)}',

@@ -30,4 +30,9 @@ abstract interface class RequestsRepository {
     String requestId,
     RequestTransitionInput input,
   );
+
+  Future<SpecialRequestMovement> confirmGpsSynchronization(
+    String requestId,
+    GpsSynchronizationInput input,
+  );
 }

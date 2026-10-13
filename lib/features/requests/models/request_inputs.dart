@@ -1,3 +1,5 @@
+import 'package:vitago_app/features/tracking/models/tracking_point.dart';
+
 class RequestArticleInput {
   const RequestArticleInput({
     required this.itemType,
@@ -82,18 +84,36 @@ class RequestTransitionInput {
     this.latitude,
     this.longitude,
     this.reason,
+    this.gpsSessions,
   });
 
   final String targetStatus;
   final String? latitude;
   final String? longitude;
   final String? reason;
+  final List<GpsSessionManifest>? gpsSessions;
 
   Map<String, dynamic> toJson() => {
     'estado_destino': targetStatus,
     'latitud': _nullable(latitude),
     'longitud': _nullable(longitude),
     'motivo': _nullable(reason),
+    if (gpsSessions != null)
+      'sesiones_gps': gpsSessions!
+          .map((session) => session.toJson())
+          .toList(growable: false),
+  };
+}
+
+class GpsSynchronizationInput {
+  const GpsSynchronizationInput(this.sessions);
+
+  final List<GpsSessionManifest> sessions;
+
+  Map<String, dynamic> toJson() => {
+    'sesiones_gps': sessions
+        .map((session) => session.toJson())
+        .toList(growable: false),
   };
 }
 

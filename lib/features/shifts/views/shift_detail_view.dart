@@ -42,6 +42,11 @@ class ShiftDetailView extends StatelessWidget {
               label: 'Tiempo activo',
               value: AppDateFormat.durationMinutes(shift.activeMinutes),
             ),
+            if (shift.operationalMinutes case final minutes?)
+              _ShiftLine(
+                label: 'Tiempo operativo',
+                value: AppDateFormat.durationMinutes(minutes),
+              ),
             const SizedBox(height: AppSpacing.lg),
             Text(
               'Resultado operativo',
@@ -67,8 +72,81 @@ class ShiftDetailView extends StatelessWidget {
               )
             else
               const _UnavailableMileage(),
+            if (shift.mileageQuality case final quality?) ...[
+              const SizedBox(height: AppSpacing.md),
+              _MileageQualityCard(quality: quality),
+            ],
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _MileageQualityCard extends StatelessWidget {
+  const _MileageQualityCard({required this.quality});
+
+  final MileageQuality quality;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    final (title, message, icon) = switch (quality.status) {
+      'CONSOLIDADO' => (
+        'Medición consolidada',
+        'Estimación GPS verificada con ${quality.coveragePercentage.toStringAsFixed(0)}% de cobertura operativa.',
+        Icons.verified_outlined,
+      ),
+      'PENDIENTE_SINCRONIZACION' => (
+        'Kilometraje pendiente',
+        '${quality.pendingPoints} punto${quality.pendingPoints == 1 ? '' : 's'} GPS pendiente${quality.pendingPoints == 1 ? '' : 's'} de sincronizar; el valor puede cambiar.',
+        Icons.sync_outlined,
+      ),
+      'SIN_DATOS' => (
+        'Sin datos suficientes',
+        'No hay segmentos utilizables; esto no significa que el recorrido fue cero.',
+        Icons.location_off_outlined,
+      ),
+      'INCOMPLETO' => (
+        'Medición incompleta',
+        'La cobertura o precisión GPS fue insuficiente para consolidar el recorrido.',
+        Icons.warning_amber_outlined,
+      ),
+      _ => (
+        'Medición sin verificar',
+        'La estimación todavía no tiene confirmación completa de sincronización.',
+        Icons.info_outline,
+      ),
+    };
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.md),
+      decoration: BoxDecoration(
+        color: colors.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(AppRadii.control),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, color: colors.primary),
+          const SizedBox(width: AppSpacing.sm),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title, style: Theme.of(context).textTheme.titleMedium),
+                const SizedBox(height: AppSpacing.xxs),
+                Text(message),
+                if (quality.discardedPoints > 0) ...[
+                  const SizedBox(height: AppSpacing.xs),
+                  Text(
+                    '${quality.discardedPoints} punto${quality.discardedPoints == 1 ? '' : 's'} descartado${quality.discardedPoints == 1 ? '' : 's'} por los filtros de calidad.',
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }

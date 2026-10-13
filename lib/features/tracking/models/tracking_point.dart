@@ -14,6 +14,8 @@ class TrackingPoint {
     this.accuracyMeters,
     this.speedMetersPerSecond,
     this.headingDegrees,
+    this.gpsSession,
+    this.sequence,
   });
 
   factory TrackingPoint.fromJson(Map<String, dynamic> json) {
@@ -27,6 +29,10 @@ class TrackingPoint {
       accuracyMeters: optionalString(json, 'precision_metros'),
       speedMetersPerSecond: optionalString(json, 'velocidad_metros_segundo'),
       headingDegrees: optionalString(json, 'rumbo_grados'),
+      gpsSession: optionalString(json, 'sesion_gps'),
+      sequence: json['secuencia'] == null
+          ? null
+          : optionalInt(json, 'secuencia'),
       recordedAt: requireDateTime(json, 'registrada_en'),
       isOperational: optionalBool(json, 'es_operativo'),
       createdAt: requireDateTime(json, 'creado_en'),
@@ -42,6 +48,8 @@ class TrackingPoint {
   final String? accuracyMeters;
   final String? speedMetersPerSecond;
   final String? headingDegrees;
+  final String? gpsSession;
+  final int? sequence;
   final DateTime recordedAt;
   final bool isOperational;
   final DateTime createdAt;
@@ -56,6 +64,8 @@ class TrackingPointInput {
     this.accuracyMeters,
     this.speedMetersPerSecond,
     this.headingDegrees,
+    this.gpsSession,
+    this.sequence,
   });
 
   final String clientId;
@@ -64,7 +74,25 @@ class TrackingPointInput {
   final String? accuracyMeters;
   final String? speedMetersPerSecond;
   final String? headingDegrees;
+  final String? gpsSession;
+  final int? sequence;
   final DateTime recordedAt;
+
+  factory TrackingPointInput.fromJson(Map<String, dynamic> json) {
+    return TrackingPointInput(
+      clientId: requireString(json, 'id_cliente'),
+      latitude: requireString(json, 'latitud'),
+      longitude: requireString(json, 'longitud'),
+      accuracyMeters: optionalString(json, 'precision_metros'),
+      speedMetersPerSecond: optionalString(json, 'velocidad_metros_segundo'),
+      headingDegrees: optionalString(json, 'rumbo_grados'),
+      recordedAt: requireDateTime(json, 'registrada_en'),
+      gpsSession: optionalString(json, 'sesion_gps'),
+      sequence: json['secuencia'] == null
+          ? null
+          : optionalInt(json, 'secuencia'),
+    );
+  }
 
   Map<String, dynamic> toJson() => {
     'id_cliente': clientId,
@@ -74,6 +102,30 @@ class TrackingPointInput {
     'velocidad_metros_segundo': speedMetersPerSecond,
     'rumbo_grados': headingDegrees,
     'registrada_en': recordedAt.toUtc().toIso8601String(),
+    if (gpsSession != null) 'sesion_gps': gpsSession,
+    if (sequence != null) 'secuencia': sequence,
+  };
+}
+
+class GpsSessionManifest {
+  const GpsSessionManifest({
+    required this.gpsSession,
+    required this.lastSequence,
+  });
+
+  factory GpsSessionManifest.fromJson(Map<String, dynamic> json) {
+    return GpsSessionManifest(
+      gpsSession: requireString(json, 'sesion_gps'),
+      lastSequence: optionalInt(json, 'ultima_secuencia'),
+    );
+  }
+
+  final String gpsSession;
+  final int lastSequence;
+
+  Map<String, dynamic> toJson() => {
+    'sesion_gps': gpsSession,
+    'ultima_secuencia': lastSequence,
   };
 }
 

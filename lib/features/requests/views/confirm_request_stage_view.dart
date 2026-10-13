@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:uuid/uuid.dart';
 import 'package:vitago_app/app/theme/app_design_tokens.dart';
 import 'package:vitago_app/core/device/device_location_service.dart';
 import 'package:vitago_app/core/errors/app_failure.dart';
@@ -34,7 +33,6 @@ class ConfirmRequestStageView extends ConsumerStatefulWidget {
 
 class _ConfirmRequestStageViewState
     extends ConsumerState<ConfirmRequestStageView> {
-  final _trackingClientId = const Uuid().v4();
   XFile? _photo;
   DateTime? _capturedAt;
   DeviceLocation? _location;
@@ -294,7 +292,6 @@ class _ConfirmRequestStageViewState
         request: widget.request,
         targetStatus: widget.targetStatus,
         location: location,
-        trackingClientId: _trackingClientId,
       );
       if (!mounted) return;
       await HapticFeedback.mediumImpact();

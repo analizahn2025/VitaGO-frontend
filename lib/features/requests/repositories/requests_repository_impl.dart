@@ -48,4 +48,10 @@ class RequestsRepositoryImpl implements RequestsRepository {
     String requestId,
     RequestTransitionInput input,
   ) => _apiService.transitionRequest(requestId, input);
+
+  @override
+  Future<SpecialRequestMovement> confirmGpsSynchronization(
+    String requestId,
+    GpsSynchronizationInput input,
+  ) => _apiService.confirmGpsSynchronization(requestId, input);
 }

@@ -3,6 +3,7 @@ import 'package:vitago_app/core/models/paginated_result.dart';
 import 'package:vitago_app/features/shifts/models/driver_shift.dart';
 import 'package:vitago_app/features/shifts/providers/shifts_providers.dart';
 import 'package:vitago_app/features/shifts/repositories/shifts_repository.dart';
+import 'package:vitago_app/features/tracking/models/tracking_point.dart';
 
 final activeShiftControllerProvider = FutureProvider.autoDispose<DriverShift?>((
   ref,
@@ -20,6 +21,11 @@ final shiftControllerProvider = FutureProvider.autoDispose
       return ref.watch(shiftsRepositoryProvider).getShift(shiftId);
     });
 
+final mileageRevisionsControllerProvider = FutureProvider.autoDispose
+    .family<PaginatedResult<MileageRevision>, String>((ref, shiftId) {
+      return ref.watch(shiftsRepositoryProvider).getMileageRevisions(shiftId);
+    });
+
 final shiftActionsControllerProvider = Provider<ShiftActionsController>((ref) {
   return ShiftActionsController(ref.watch(shiftsRepositoryProvider));
 });
@@ -34,4 +40,9 @@ class ShiftActionsController {
 
   Future<DriverShift> finish(String shiftId, ShiftCoordinatesInput input) =>
       _repository.finishShift(shiftId, input);
+
+  Future<DriverShift> confirmGpsSynchronization(
+    String shiftId,
+    List<GpsSessionManifest> sessions,
+  ) => _repository.confirmGpsSynchronization(shiftId, sessions);
 }

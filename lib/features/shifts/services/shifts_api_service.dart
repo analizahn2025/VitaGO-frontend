@@ -4,6 +4,7 @@ import 'package:vitago_app/core/models/json_readers.dart';
 import 'package:vitago_app/core/models/paginated_result.dart';
 import 'package:vitago_app/core/network/api_client.dart';
 import 'package:vitago_app/features/shifts/models/driver_shift.dart';
+import 'package:vitago_app/features/tracking/models/tracking_point.dart';
 
 class ShiftsApiService {
   const ShiftsApiService(this._apiClient);
@@ -92,6 +93,49 @@ class ShiftsApiService {
     } on FormatException {
       throw const AppFailure(
         message: 'La jornada finalizada no tiene el formato esperado.',
+      );
+    }
+  }
+
+  Future<DriverShift> confirmGpsSynchronization(
+    String shiftId,
+    List<GpsSessionManifest> sessions,
+  ) async {
+    try {
+      final response = await _apiClient.post<Map<String, dynamic>>(
+        'jornadas/$shiftId/sincronizacion-gps/',
+        data: {
+          'sesiones_gps': sessions
+              .map((session) => session.toJson())
+              .toList(growable: false),
+        },
+      );
+      return DriverShift.fromJson(_requiredData(response.data));
+    } on DioException catch (error) {
+      throw AppFailure.fromDio(error);
+    } on FormatException {
+      throw const AppFailure(
+        message: 'La confirmación GPS no tiene el formato esperado.',
+      );
+    }
+  }
+
+  Future<PaginatedResult<MileageRevision>> getMileageRevisions(
+    String shiftId,
+  ) async {
+    try {
+      final response = await _apiClient.get<Map<String, dynamic>>(
+        'jornadas/$shiftId/kilometraje/revisiones/',
+      );
+      return PaginatedResult.fromJson(
+        _requiredData(response.data),
+        MileageRevision.fromJson,
+      );
+    } on DioException catch (error) {
+      throw AppFailure.fromDio(error);
+    } on FormatException {
+      throw const AppFailure(
+        message: 'Las revisiones de kilometraje no tienen el formato esperado.',
       );
     }
   }

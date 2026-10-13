@@ -1,4 +1,5 @@
 import 'package:vitago_app/core/models/json_readers.dart';
+import 'package:vitago_app/features/shifts/models/driver_shift.dart';
 
 class RequestServiceType {
   const RequestServiceType({
@@ -204,9 +205,11 @@ class SpecialRequestMovement {
     this.endLatitude,
     this.endLongitude,
     this.traveledKilometers,
+    this.mileageQuality,
   });
 
   factory SpecialRequestMovement.fromJson(Map<String, dynamic> json) {
+    final mileageQuality = optionalJsonMap(json, 'calidad_kilometraje');
     return SpecialRequestMovement(
       id: requireString(json, 'id'),
       driverId: requireString(json, 'repartidor_id'),
@@ -221,6 +224,9 @@ class SpecialRequestMovement {
       traveledKilometers: optionalString(json, 'kilometros_recorridos'),
       recordsConsidered: optionalInt(json, 'registros_considerados'),
       recordsDiscarded: optionalInt(json, 'registros_descartados'),
+      mileageQuality: mileageQuality == null || mileageQuality.isEmpty
+          ? null
+          : MileageQuality.fromJson(mileageQuality),
     );
   }
 
@@ -237,6 +243,7 @@ class SpecialRequestMovement {
   final String? traveledKilometers;
   final int recordsConsidered;
   final int recordsDiscarded;
+  final MileageQuality? mileageQuality;
 }
 
 class RequestArticle {

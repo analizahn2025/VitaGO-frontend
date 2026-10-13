@@ -18,6 +18,7 @@ abstract final class AppPermissions {
   static const updateRequestStatus = 'solicitud.actualizar_estado';
   static const cancelRequests = 'solicitud.cancelar';
   static const viewRequestTracking = 'solicitud.ver_seguimiento';
+  static const calculateRoute = 'ruta.calcular';
   static const viewVehicles = 'vehiculo.ver';
   static const manageVehicles = 'vehiculo.administrar';
   static const viewDrivers = 'repartidor.ver';
