@@ -13,6 +13,7 @@ import 'package:vitago_app/features/requests/controllers/request_stage_controlle
 import 'package:vitago_app/features/requests/controllers/requests_controller.dart';
 import 'package:vitago_app/features/requests/models/request_models.dart';
 import 'package:vitago_app/features/requests/views/assign_request_view.dart';
+import 'package:vitago_app/features/requests/views/cancel_request_dialog.dart';
 import 'package:vitago_app/features/requests/views/confirm_request_stage_view.dart';
 import 'package:vitago_app/features/requests/views/transition_request_view.dart';
 import 'package:vitago_app/features/tracking/views/request_tracking_section.dart';
@@ -88,6 +89,12 @@ class _RequestDetailContent extends ConsumerWidget {
     final allowedTransitions = _allowedTransitions(
       evidenceReady: evidenceReady,
     );
+    final canCancel =
+        profile.can(AppPermissions.cancelRequests) &&
+        requestIsCancellable(request.status);
+    final operationalTransitions = allowedTransitions
+        .where((status) => status != 'CANCELLED')
+        .toList(growable: false);
     final canAssign =
         request.status == 'PENDING' &&
         profile.can(AppPermissions.assignRequests);
@@ -103,11 +110,11 @@ class _RequestDetailContent extends ConsumerWidget {
         ? requestNextOperationalStatus(request.status)
         : null;
     final primaryTransition =
-        primaryStatus != null && allowedTransitions.contains(primaryStatus)
+        primaryStatus != null && operationalTransitions.contains(primaryStatus)
         ? primaryStatus
         : null;
     final exceptionTransitions = profile.isDriver
-        ? allowedTransitions
+        ? operationalTransitions
               .where((status) => status != primaryTransition)
               .toList(growable: false)
         : const <String>[];
@@ -214,7 +221,7 @@ class _RequestDetailContent extends ConsumerWidget {
                     canReassign ||
                     primaryTransition != null ||
                     exceptionTransitions.isNotEmpty ||
-                    (!profile.isDriver && allowedTransitions.isNotEmpty)) ...[
+                    canCancel) ...[
                   const SizedBox(height: AppSpacing.xl),
                   Text(
                     profile.isDriver ? 'Siguiente paso' : 'Acciones',
@@ -262,12 +269,15 @@ class _RequestDetailContent extends ConsumerWidget {
                                 : 'Reportar problema',
                           ),
                         ),
-                      if (!profile.isDriver && allowedTransitions.isNotEmpty)
-                        FilledButton.icon(
-                          onPressed: () =>
-                              _openTransition(context, ref, allowedTransitions),
-                          icon: const Icon(Icons.update),
-                          label: const Text('Actualizar estado'),
+                      if (canCancel)
+                        OutlinedButton.icon(
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: colors.error,
+                            side: BorderSide(color: colors.error),
+                          ),
+                          onPressed: () => _openCancellation(context, ref),
+                          icon: const Icon(Icons.cancel_outlined),
+                          label: const Text('Cancelar envío'),
                         ),
                     ],
                   ),
@@ -378,6 +388,21 @@ class _RequestDetailContent extends ConsumerWidget {
       ),
     );
     if (changed == true) onChanged();
+  }
+
+  Future<void> _openCancellation(BuildContext context, WidgetRef ref) async {
+    final updated = await showDialog<ServiceRequestDetail>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => CancelRequestDialog(request: request),
+    );
+    if (updated == null || !context.mounted) return;
+    _handleCompletedTransition(context, ref, updated);
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Envío cancelado correctamente.')),
+      );
+    }
   }
 
   Future<void> _openTransition(

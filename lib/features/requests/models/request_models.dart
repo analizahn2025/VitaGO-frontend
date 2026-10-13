@@ -351,6 +351,17 @@ const requestTerminalStates = {
   'DELIVERY_FAILED',
 };
 
+const requestCancellableStates = {
+  'PENDING',
+  'ASSIGNED',
+  'GOING_TO_PICKUP',
+  'AT_PICKUP',
+};
+
+bool requestIsCancellable(String status) {
+  return requestCancellableStates.contains(status.toUpperCase());
+}
+
 const requestTransitionMatrix = <String, List<String>>{
   'PENDING': ['CANCELLED'],
   'ASSIGNED': ['GOING_TO_PICKUP', 'CANCELLED'],

@@ -18,12 +18,17 @@ El código del backend sigue siendo la fuente técnica definitiva. Este archivo
 es la referencia de integración para el frontend y solo presenta como
 **disponibles** las funciones que ya están implementadas.
 
-Última actualización: **2026-10-02**.
+Última actualización: **2026-10-06**.
 
 ## 2. Historial de cambios
 
 | Versión | Fecha | Cambio |
 |---|---|---|
+| 0.25.2 | 2026-10-06 | Se añadieron consultas paginadas de rutas y versiones históricas, más el detalle de paradas congeladas por versión, con acceso del motorista propietario o de supervisión autorizada. |
+| 0.25.1 | 2026-10-06 | `mi-ruta/` añade `ruta_id` y `version_actual`; el backend conserva versiones inmutables del orden de paradas, sin calcular navegación vial. |
+| 0.25.0 | 2026-10-06 | Se añadió `GET /api/v1/rutas/mi-ruta/`: paradas operativas pendientes y próxima parada para el motorista propietario, con orden provisional por asignación, prioridad recogida primero y envío especial sin mapa. |
+| 0.24.0 | 2026-10-05 | Se corrigió la visibilidad global de solicitudes; el listado y detalle identifican creador y sucursal, admiten filtro por solicitante y ofrecen agrupaciones administrativas paginadas. |
+| 0.23.0 | 2026-10-05 | El cierre de jornada calcula y congela kilómetros operativos con GPS válido durante asignaciones; suma envíos especiales ya cerrados y expone `kilometraje_disponible`. |
 | 0.22.1 | 2026-10-02 | `opciones-creacion/` informa con `mensaje_disponibilidad` cuando no hay sucursales de origen o destino, conservando respuesta `200` y listas vacías. |
 | 0.22.0 | 2026-10-01 | Corporate asigna al motorista elegible más cercano según GPS al crear; se corrigió el listado de disponibles y la consulta inicial entre sucursales. |
 | 0.21.0 | 2026-10-01 | Solo motocicletas nuevas; cinco solicitudes activas calculadas por motorista; notificaciones persistentes; errores de artículos con índice y campo. |
@@ -153,6 +158,7 @@ nombre predeterminado del claim es `sub`, aunque es configurable por despliegue.
 | `GET` | `/api/v1/solicitudes/opciones-creacion/` | Corporate | Bearer + `solicitud.crear` en alcance | `200` |
 | `GET` | `/api/v1/solicitudes/resumen-solicitante/` | Ambos | Bearer + visibilidad de solicitudes | `200` |
 | `GET` | `/api/v1/solicitudes/` | Ambos | Bearer + visibilidad de solicitudes | `200` |
+| `GET` | `/api/v1/solicitudes/agrupaciones/` | Ambos | Bearer + `solicitud.ver` en alcance administrativo | `200` |
 | `POST` | `/api/v1/solicitudes/` | Corporate | Bearer + `solicitud.crear`; especiales requieren además `solicitud.crear_envio_especial` con alcance de empresa | `201` |
 | `GET` | `/api/v1/solicitudes/{solicitud_id}/` | Ambos | Bearer + visibilidad de la solicitud | `200` |
 | `POST` | `/api/v1/solicitudes/{solicitud_id}/asignaciones/` | Ambos | Bearer + `solicitud.asignar` o `solicitud.reasignar` | `201` |
@@ -177,6 +183,10 @@ nombre predeterminado del claim es `sub`, aunque es configurable por despliegue.
 | `GET` | `/api/v1/jornadas/` | Ambos | Bearer + `jornada.ver` | `200` |
 | `GET` | `/api/v1/jornadas/{jornada_id}/` | Ambos | Bearer + `jornada.ver` en alcance | `200` |
 | `POST` | `/api/v1/jornadas/{jornada_id}/finalizar/` | Ambos | Motorista propietario + `jornada.finalizar` | `200` |
+| `GET` | `/api/v1/rutas/mi-ruta/` | Ambos | Motorista propio + `solicitud.ver_asignadas` | `200` |
+| `GET` | `/api/v1/rutas/` | Ambos | Propietario + `ruta.ver`, o administración autorizada | `200` |
+| `GET` | `/api/v1/rutas/{ruta_id}/versiones/` | Ambos | Misma visibilidad de la ruta | `200` |
+| `GET` | `/api/v1/rutas/{ruta_id}/versiones/{numero}/` | Ambos | Misma visibilidad de la ruta | `200` |
 | `POST` | `/api/v1/seguimiento/registros/` | Ambos | Motorista propio + `repartidor.registrar_ubicacion` | `201` |
 | `GET` | `/api/v1/solicitudes/{solicitud_id}/seguimiento/` | Ambos | Visibilidad de solicitud + `solicitud.ver_seguimiento` | `200` |
 | `GET` | `/api/v1/incidencias/` | Ambos | Motorista propio o `incidencia.revisar` en alcance | `200` |
@@ -1195,6 +1205,8 @@ Lista paginada y limitada por los permisos anteriores. Filtros opcionales:
 |---|---|
 | `empresa_id` | UUID de empresa. |
 | `sucursal_id` | UUID de sucursal. |
+| `sin_sucursal` | `true` para solicitudes sin sucursal; no combinar con `sucursal_id`. |
+| `solicitada_por_id` | UUID del usuario que creó la solicitud. |
 | `prioridad` | `NORMAL` o `PRIORITY`. |
 | `estado` | Uno de los estados oficiales de solicitud. |
 | `modalidad` | `ENTRE_SUCURSALES`, `EMPRESA_TRANSPORTE` o `ESPECIAL` en Corporate. |
@@ -1212,7 +1224,16 @@ Respuesta `200` completa de ejemplo:
       "numero": "SOL-20260928-BF9490A0",
       "empresa_id": "3b0407a3-bc31-4d31-9619-7a3f01ac0b96",
       "sucursal_id": "d2c7775a-8223-4cf7-b23b-e11caf453120",
+      "sucursal": {
+        "id": "d2c7775a-8223-4cf7-b23b-e11caf453120",
+        "nombre": "Sucursal Centro"
+      },
       "solicitada_por_id": "8429ba3a-d32f-4696-bb70-d3b48ef47f30",
+      "solicitante": {
+        "id": "8429ba3a-d32f-4696-bb70-d3b48ef47f30",
+        "nombres": "Ana",
+        "apellidos": "López"
+      },
       "repartidor_asignado_id": "a465f3ae-a12b-4972-ae27-8076480f3773",
       "prioridad": "PRIORITY",
       "modalidad": "ENTRE_SUCURSALES",
@@ -1250,6 +1271,75 @@ El listado no incluye `notas`, `articulos`, `eventos`, `asignaciones` ni las
 fechas operativas. Para esos campos debe consultarse el detalle. Cuando la
 solicitud aún no posee motorista, `repartidor_asignado_id` es `null`; cuando no
 pertenece a una sucursal concreta, `sucursal_id` es `null`.
+En ese caso `sucursal` también es `null`. `solicitante` identifica al
+usuario creador sin exponer su correo. El filtro por solicitante o sucursal
+**nunca** amplía el alcance autorizado; un administrador de empresa solo
+recibe solicitudes de su empresa. El listado sin filtros conserva su contrato
+paginado anterior para compatibilidad.
+
+### `GET /api/v1/solicitudes/agrupaciones/`
+
+Consulta exclusiva para usuarios con `solicitud.ver` en alcance administrativo.
+El parámetro obligatorio `por` admite `sucursal` o `solicitante`; `empresa_id`
+es opcional. La respuesta usa la paginación estándar (`pagina`,
+`tamano_pagina`, máximo 100). Los grupos se calculan **solo** con solicitudes
+visibles para ese administrador. Un solicitante común o un motorista sin
+`solicitud.ver` recibe `403`; un valor de `por` inválido devuelve `400`.
+
+```http
+GET /api/v1/solicitudes/agrupaciones/?por=sucursal&empresa_id=3b0407a3-bc31-4d31-9619-7a3f01ac0b96
+```
+
+```json
+{
+  "conteo": 2,
+  "pagina_siguiente": null,
+  "pagina_anterior": null,
+  "resultados": [
+    {
+      "empresa_id": "3b0407a3-bc31-4d31-9619-7a3f01ac0b96",
+      "sucursal_id": "d2c7775a-8223-4cf7-b23b-e11caf453120",
+      "empresa_nombre": "Analiza",
+      "sucursal_nombre": "Sucursal Centro",
+      "total": 6
+    },
+    {
+      "empresa_id": "3b0407a3-bc31-4d31-9619-7a3f01ac0b96",
+      "sucursal_id": "af34a836-63dd-4658-bf3d-51af60e8c5a0",
+      "empresa_nombre": "Analiza",
+      "sucursal_nombre": "Sucursal Norte",
+      "total": 1
+    }
+  ]
+}
+```
+
+Con `por=solicitante`, la respuesta tiene la misma envoltura paginada:
+
+```json
+{
+  "conteo": 1,
+  "pagina_siguiente": null,
+  "pagina_anterior": null,
+  "resultados": [
+    {
+      "empresa_id": "3b0407a3-bc31-4d31-9619-7a3f01ac0b96",
+      "solicitada_por_id": "8429ba3a-d32f-4696-bb70-d3b48ef47f30",
+      "empresa_nombre": "Analiza",
+      "solicitante_nombres": "Ana",
+      "solicitante_apellidos": "López",
+      "total": 2
+    }
+  ]
+}
+```
+
+El frontend debe mostrar primero el selector de sucursal o solicitante y,
+al elegir un grupo, consultar `GET /api/v1/solicitudes/` con `empresa_id`
+junto con `sucursal_id` o `solicitada_por_id`. Para el grupo «Sin sucursal»,
+`sucursal_id` y `sucursal_nombre` son `null`; consultar el listado con
+`sin_sucursal=true`. Hay que recorrer las páginas de grupos y solicitudes
+cuando `pagina_siguiente` no es `null`.
 
 ### `POST /api/v1/solicitudes/`
 
@@ -1351,7 +1441,16 @@ Respuesta `200` completa de ejemplo:
   "numero": "SOL-20260928-BF9490A0",
   "empresa_id": "3b0407a3-bc31-4d31-9619-7a3f01ac0b96",
   "sucursal_id": "d2c7775a-8223-4cf7-b23b-e11caf453120",
+  "sucursal": {
+    "id": "d2c7775a-8223-4cf7-b23b-e11caf453120",
+    "nombre": "Sucursal Centro"
+  },
   "solicitada_por_id": "8429ba3a-d32f-4696-bb70-d3b48ef47f30",
+  "solicitante": {
+    "id": "8429ba3a-d32f-4696-bb70-d3b48ef47f30",
+    "nombres": "Ana",
+    "apellidos": "López"
+  },
   "repartidor_asignado_id": "a465f3ae-a12b-4972-ae27-8076480f3773",
   "prioridad": "PRIORITY",
   "modalidad": "ENTRE_SUCURSALES",
@@ -1874,7 +1973,16 @@ Respuesta `201` completa de una primera asignación:
   "numero": "SOL-20260928-BF9490A0",
   "empresa_id": "3b0407a3-bc31-4d31-9619-7a3f01ac0b96",
   "sucursal_id": "d2c7775a-8223-4cf7-b23b-e11caf453120",
+  "sucursal": {
+    "id": "d2c7775a-8223-4cf7-b23b-e11caf453120",
+    "nombre": "Sucursal Centro"
+  },
   "solicitada_por_id": "8429ba3a-d32f-4696-bb70-d3b48ef47f30",
+  "solicitante": {
+    "id": "8429ba3a-d32f-4696-bb70-d3b48ef47f30",
+    "nombres": "Ana",
+    "apellidos": "López"
+  },
   "repartidor_asignado_id": "a465f3ae-a12b-4972-ae27-8076480f3773",
   "prioridad": "PRIORITY",
   "tipo_servicio": {
@@ -2076,7 +2184,16 @@ Ejemplo después de avanzar a `AT_PICKUP`:
   "numero": "SOL-20260928-BF9490A0",
   "empresa_id": "3b0407a3-bc31-4d31-9619-7a3f01ac0b96",
   "sucursal_id": "d2c7775a-8223-4cf7-b23b-e11caf453120",
+  "sucursal": {
+    "id": "d2c7775a-8223-4cf7-b23b-e11caf453120",
+    "nombre": "Sucursal Centro"
+  },
   "solicitada_por_id": "8429ba3a-d32f-4696-bb70-d3b48ef47f30",
+  "solicitante": {
+    "id": "8429ba3a-d32f-4696-bb70-d3b48ef47f30",
+    "nombres": "Ana",
+    "apellidos": "López"
+  },
   "repartidor_asignado_id": "a465f3ae-a12b-4972-ae27-8076480f3773",
   "prioridad": "PRIORITY",
   "tipo_servicio": {
@@ -2367,15 +2484,202 @@ Al finalizar, el backend:
 
 - cambia la jornada a `FINALIZADA`;
 - calcula y congela servicios, recolecciones, entregas, normales,
-  prioritarios y minutos activos;
+  prioritarios, minutos activos y kilómetros operativos;
 - cambia al motorista a `OFFLINE` con capacidad `EMPTY`;
 - conserva el historial y no permite eliminar la jornada.
 
-Mientras no esté implementado el cálculo de kilometraje,
-`kilometraje_disponible=false` y `kilometros_operativos="0.000"`. Las
-incidencias ya se calculan desde su módulo operativo, por lo que
-`incidencias_disponibles=true`. El frontend no debe presentar el kilometraje
-cero como una medición definitiva.
+`kilometros_operativos` es una cadena decimal con tres decimales. El backend
+la calcula a partir de puntos GPS operativos válidos entre aceptación y fin de
+asignaciones, sin unir intervalos separados. Descarta puntos de baja precisión,
+velocidades anómalas y saltos imposibles. El recorrido de cada envío
+`ESPECIAL` terminado se agrega una sola vez desde su kilometraje congelado.
+Es una estimación entre coordenadas GPS, **no** distancia vial de Google Maps.
+No incluye desplazamientos personales ni posteriores al último servicio.
+
+`kilometraje_disponible=true` significa que hubo al menos un par de puntos
+normales válidos o un envío especial finalizado. Si no hay datos suficientes,
+vale `false` y `kilometros_operativos="0.000"`; el frontend debe mostrar
+«Kilometraje no disponible», no interpretar el cero como distancia recorrida.
+Durante una jornada activa el resumen aún no se ha calculado y el indicador
+permanece en `false`. El valor se congela al cerrar: enviar los GPS pendientes
+**antes** de llamar a `finalizar/`; los puntos tardíos no recalculan el resumen.
+Las jornadas históricas conservan `kilometraje_disponible=false` sin recálculo.
+Las incidencias se calculan desde su módulo y
+`incidencias_disponibles=true`.
+
+### Mi ruta operativa del motorista
+
+```http
+GET /api/v1/rutas/mi-ruta/
+```
+
+Requiere Bearer token, perfil activo de motorista propio y
+`solicitud.ver_asignadas`. Devuelve `401` sin sesión, `404` sin perfil activo y
+`403` sin el permiso. No acepta un `repartidor_id` ajeno.
+
+Respuesta `200` de ejemplo con una solicitud ya recogida:
+
+```json
+{
+  "repartidor_id": "a465f3ae-a12b-4972-ae27-8076480f3773",
+  "jornada_id": "9f106ce2-050c-4ef7-ab94-446207b8499e",
+  "ruta_id": "e08d2320-7645-448e-b247-b999fba999dd",
+  "version_actual": 2,
+  "orden_tipo": "ASIGNACION",
+  "ruta_calculada": false,
+  "proxima_parada": {
+    "orden": 1,
+    "solicitud_id": "bf9490a0-aeb4-4df5-8bd1-8c1341ddfeac",
+    "numero_solicitud": "SOL-20260928-BF9490A0",
+    "prioridad": "NORMAL",
+    "modalidad": "ENTRE_SUCURSALES",
+    "estado_solicitud": "PICKED_UP",
+    "tipo": "ENTREGA",
+    "ubicacion": {
+      "id": "3c18fa32-7bc2-4743-9744-f22453730413",
+      "nombre": "Sucursal Norte",
+      "direccion": "Bulevar Suyapa, Tegucigalpa",
+      "latitud": "14.085600",
+      "longitud": "-87.165400"
+    },
+    "destino_especial": null,
+    "presentacion_ruta": "MAPA"
+  },
+  "paradas": [
+    {
+      "orden": 1,
+      "solicitud_id": "bf9490a0-aeb4-4df5-8bd1-8c1341ddfeac",
+      "numero_solicitud": "SOL-20260928-BF9490A0",
+      "prioridad": "NORMAL",
+      "modalidad": "ENTRE_SUCURSALES",
+      "estado_solicitud": "PICKED_UP",
+      "tipo": "ENTREGA",
+      "ubicacion": {
+        "id": "3c18fa32-7bc2-4743-9744-f22453730413",
+        "nombre": "Sucursal Norte",
+        "direccion": "Bulevar Suyapa, Tegucigalpa",
+        "latitud": "14.085600",
+        "longitud": "-87.165400"
+      },
+      "destino_especial": null,
+      "presentacion_ruta": "MAPA"
+    }
+  ]
+}
+```
+
+`proxima_parada` es el primer elemento de `paradas`. Sin servicios activos,
+`paradas=[]` y `proxima_parada=null`. `jornada_id` puede ser `null` si el
+motorista aún no inició jornada. `ruta_id` y `version_actual` pueden ser
+`null` si todavía no se ha creado una ruta persistida, incluso para
+asignaciones anteriores a esta actualización. El frontend puede ignorar estos
+dos campos sin alterar su flujo. La vista incluye solamente solicitudes
+actualmente asignadas y activas; una cancelación, reasignación, entrega o
+recolección se refleja en la siguiente consulta, sin esperar sincronización
+de una ruta persistida. El historial se guarda cuando una operación cambia la
+secuencia de paradas; consultar este `GET` no crea versiones. Antes de recoger
+una solicitud aparecen
+`RECOLECCION` y `ENTREGA`; después, solo la entrega.
+
+El orden `ASIGNACION` es **provisional**: sigue la antigüedad de asignación,
+no optimiza calles ni tráfico. Un prioritario ya recogido aparece primero para
+ir directamente a su destino. Un envío `ESPECIAL` ya recogido también toma
+precedencia y usa `tipo=ENVIO_ESPECIAL`, `ubicacion=null`, la descripción en
+`destino_especial` y `presentacion_ruta=SOLO_KILOMETROS`. Para su recolección
+sí se informa la ubicación de origen, pero no se dibuja ruta seleccionada.
+`ruta_calculada=false` significa que este endpoint no entrega polilínea,
+ETA ni kilómetros viales. La persistencia de versiones registra el orden
+operativo, pero no sustituye la posterior integración de Google Maps. No hay
+todavía una ruta vial calculada.
+
+### Historial de rutas y versiones
+
+```http
+GET /api/v1/rutas/?repartidor_id={uuid}&estado=FINALIZADA&pagina=1&tamano_pagina=20
+GET /api/v1/rutas/{ruta_id}/versiones/?pagina=1&tamano_pagina=20
+GET /api/v1/rutas/{ruta_id}/versiones/{numero}/
+```
+
+Todos requieren Bearer token. El motorista con `ruta.ver` consulta solo sus
+rutas. Para consultar rutas de otros motoristas se requieren `ruta.ver` y
+`repartidor.ver_ubicacion` con alcance compatible. Un historial que contenga
+paradas de otra empresa no se expone a administradores de alcance empresarial.
+El superadministrador global puede consultarlo. No se publican rutas a
+solicitantes ni se aceptan operaciones de escritura en estos endpoints.
+
+El listado de rutas acepta `repartidor_id` UUID y `estado` (`ACTIVA` o
+`FINALIZADA`) como filtros opcionales. Responde con el sobre paginado estándar
+(`conteo`, `pagina_siguiente`, `pagina_anterior`, `resultados`), ordenado de la
+más reciente a la más antigua. `tamano_pagina` tiene máximo 100:
+
+```json
+{
+  "conteo": 1,
+  "pagina_siguiente": null,
+  "pagina_anterior": null,
+  "resultados": [
+    {
+      "id": "e08d2320-7645-448e-b247-b999fba999dd",
+      "repartidor_id": "a465f3ae-a12b-4972-ae27-8076480f3773",
+      "jornada_id": "9f106ce2-050c-4ef7-ab94-446207b8499e",
+      "estado": "ACTIVA",
+      "iniciada_en": "2026-10-06T09:00:00-06:00",
+      "finalizada_en": null,
+      "cantidad_versiones": 2
+    }
+  ]
+}
+```
+
+Las versiones se listan por `numero` descendente. Su respuesta tiene el
+mismo sobre paginado y cada resultado contiene `id`, `ruta_id`, `numero`,
+`motivo`, `creada_en` y `cantidad_paradas`. El detalle de una versión añade
+`paradas` en orden ascendente:
+
+```json
+{
+  "id": "465f6eb1-2991-4ce1-89f5-1ba31c09560a",
+  "ruta_id": "e08d2320-7645-448e-b247-b999fba999dd",
+  "numero": 2,
+  "motivo": "CAMBIO_ESTADO",
+  "creada_en": "2026-10-06T09:15:00-06:00",
+  "cantidad_paradas": 1,
+  "paradas": [
+    {
+      "orden": 1,
+      "solicitud_id": "bf9490a0-aeb4-4df5-8bd1-8c1341ddfeac",
+      "numero_solicitud": "SOL-20260928-BF9490A0",
+      "prioridad": "NORMAL",
+      "modalidad": "ENTRE_SUCURSALES",
+      "estado_solicitud": "PICKED_UP",
+      "tipo": "ENTREGA",
+      "ubicacion": {
+        "id": "3c18fa32-7bc2-4743-9744-f22453730413",
+        "nombre": "Sucursal Norte",
+        "direccion": "Bulevar Suyapa, Tegucigalpa",
+        "latitud": "14.085600",
+        "longitud": "-87.165400"
+      },
+      "destino_especial": null,
+      "presentacion_ruta": "MAPA"
+    }
+  ]
+}
+```
+
+La ubicación en este detalle es la copia histórica: cambios posteriores al
+catálogo de lugares no alteran la versión. Para un envío especial,
+`ubicacion=null`, `destino_especial` conserva el texto y
+`presentacion_ruta=SOLO_KILOMETROS`. Una versión sin paradas devuelve
+`cantidad_paradas=0` y `paradas=[]`. Los motivos disponibles son `INICIAL`,
+`ASIGNACION`, `REASIGNACION`, `CAMBIO_ESTADO`, `CANCELACION`,
+`INICIO_JORNADA` y `CIERRE_JORNADA`.
+
+Sin sesión se responde `401`; sin `ruta.ver`, `403`; una ruta o versión
+inexistente o fuera del alcance devuelve `404`. Un filtro inválido devuelve
+`400` asociado a `repartidor_id` o `estado`. Las rutas asignadas antes de
+activar este historial no se reconstruyen retrospectivamente. Estas consultas
+no crean versiones ni contienen polilínea, ETA o cálculo vial.
 
 ## 23. Seguimiento GPS
 
@@ -2509,10 +2813,9 @@ solicitud termina, se cancela o falla, el backend responde
 acceso al detalle histórico de la solicitud.
 
 La primera integración puede consultar este endpoint periódicamente. Aún no se
-usan WebSockets, Redis, Google Routes ni Google Roads. El kilometraje general
-de la jornada no se calcula. En cambio, los puntos GPS del movimiento
-`ESPECIAL` sí permiten calcular sus kilómetros al cerrarlo, aplicando los
-filtros de precisión y velocidad descritos arriba.
+usan WebSockets, Redis, Google Routes ni Google Roads. Los puntos GPS válidos
+contribuyen al kilometraje operativo al cerrar la jornada; los movimientos
+`ESPECIAL` calculan y congelan su kilometraje al terminar cada envío.
 
 ## 24. Incidencias operativas
 
@@ -2651,11 +2954,11 @@ sesiones.
 |---|---|---|
 | Acceso e inicio | Autenticación local durante desarrollo; `GET /api/v1/usuarios/mi-perfil/`; `GET /api/v1/repartidores/mi-perfil/` | Usar `roles` y `permisos` para la navegación; consultar el perfil de motorista para obtener `id`, estado, capacidad y vehículo antes de iniciar jornada. |
 | Jornada actual | `GET /api/v1/jornadas/activa/`; `POST /api/v1/jornadas/iniciar/` | `jornada: null` significa que aún no comenzó. El inicio devuelve `id` de jornada y `repartidor_id`; conservar ambos. |
-| Servicios asignados | `GET /api/v1/solicitudes/`; `GET /api/v1/solicitudes/{solicitud_id}/` | El listado paginado se limita al motorista autenticado. Separar servicios en curso e históricos mediante `estado`; consultar el detalle antes de operar. |
+| Servicios asignados y paradas | `GET /api/v1/solicitudes/`; `GET /api/v1/solicitudes/{solicitud_id}/`; `GET /api/v1/rutas/mi-ruta/` | El listado paginado se limita al motorista autenticado. `mi-ruta/` entrega las paradas operativas pendientes y la próxima parada, sin navegación ni ETA. |
 | Recolección, traslado y entrega | `POST /api/v1/solicitudes/{solicitud_id}/transiciones/` | Mostrar solo la transición siguiente de la matriz de la sección 21; usar el detalle devuelto como estado actualizado. |
 | Fotos | `POST /api/v1/solicitudes/{solicitud_id}/evidencias/`; `GET` de evidencias y archivo | Registrar `FOTO_RECOLECCION` en `AT_PICKUP` antes de `PICKED_UP`, y `FOTO_ENTREGA` en `AT_DESTINATION` antes de `DELIVERED`. El archivo requiere Bearer token. |
 | Ubicación e incidencias | `POST /api/v1/seguimiento/registros/`; `POST /api/v1/incidencias/` | Enviar GPS con `jornada_id` e `id_cliente` estable; las incidencias pertenecen a una jornada activa. |
-| Cierre y resumen | `POST /api/v1/jornadas/{jornada_id}/finalizar/`; `GET /api/v1/jornadas/` | No se puede cerrar con asignaciones activas. El resumen de jornada no ofrece kilómetros generales medidos. |
+| Cierre y resumen | `POST /api/v1/jornadas/{jornada_id}/finalizar/`; `GET /api/v1/jornadas/` | No se puede cerrar con asignaciones activas. Mostrar `kilometros_operativos` solo si `kilometraje_disponible=true`; vaciar la cola GPS antes de cerrar. |
 
 `GET /api/v1/solicitudes/` acepta `estado`, `prioridad` y `modalidad` como
 filtros, pero solo un valor de `estado` por petición. Para una vista de
@@ -2664,8 +2967,8 @@ listado paginado, recorriendo todas sus páginas. Para el historial, los
 estados terminales son `DELIVERED`, `CANCELLED`, `PICKUP_FAILED` y
 `DELIVERY_FAILED`. Una solicitud reasignada deja de ser visible para el
 motorista anterior; por ahora no existe un historial propio independiente de
-las solicitudes visibles. Tampoco hay un endpoint de orden de paradas o
-«siguiente servicio».
+las solicitudes visibles. Para las paradas pendientes y la próxima acción se
+usa `GET /api/v1/rutas/mi-ruta/`, cuyo orden es provisional.
 
 En Analiza, `modalidad` distingue `ENTRE_SUCURSALES`,
 `EMPRESA_TRANSPORTE` y `ESPECIAL`. En las dos primeras, `origen` y `destino`
@@ -2695,13 +2998,11 @@ a la pantalla.
 
 ### Datos que todavía faltan para completar la interfaz del motorista
 
-- No existe aún una API de ruta calculada, paradas ordenadas, ETA o recálculo
-  con Google Maps. La pantalla «Mi ruta» puede mostrar la lista de servicios
-  asignados y sus ubicaciones registradas; navegación y optimización de ruta
-  quedan para la siguiente fase.
-- No existe un resumen de kilómetros generales de jornada. Mostrar los
-  kilómetros de `ESPECIAL` solo en ese envío terminado, nunca como total de
-  jornada ni como distancia de todos los servicios.
+- `GET /api/v1/rutas/mi-ruta/` ya ofrece paradas ordenadas provisionalmente.
+  No existe aún una ruta vial calculada, polilínea, ETA ni recálculo con
+  Google Maps. Navegación y optimización quedan para la siguiente fase.
+- El resumen de jornada sí incluye kilómetros operativos medidos por GPS.
+  No equivale a ruta vial calculada, ETA ni distancia de cada servicio.
 
 ## 26. Panel administrativo
 
