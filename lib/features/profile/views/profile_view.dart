@@ -193,70 +193,67 @@ class _ProfileIdentityHeader extends StatelessWidget {
         AppSpacing.lg,
         AppSpacing.xl,
       ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          CircleAvatar(
-            radius: 34,
-            backgroundColor: Colors.white,
-            foregroundColor: colorScheme.primary,
-            child: Text(
-              _initials(profile.user),
-              style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                color: colorScheme.primary,
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-          ),
-          const SizedBox(width: AppSpacing.md),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  profile.user.fullName,
-                  style: Theme.of(context).textTheme.titleLarge
-                      ?.copyWith(color: colorScheme.onPrimary),
-                ),
-                const SizedBox(height: AppSpacing.xxs),
-                Text(
-                  profile.user.email,
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: colorScheme.onPrimary.withValues(alpha: 0.86),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final textScale = MediaQuery.textScalerOf(context).scale(16) / 16;
+          final compact = constraints.maxWidth < 320 || textScale > 1.25;
+          return Row(
+            crossAxisAlignment: compact
+                ? CrossAxisAlignment.start
+                : CrossAxisAlignment.center,
+            children: [
+              CircleAvatar(
+                radius: 34,
+                backgroundColor: Colors.white,
+                foregroundColor: colorScheme.primary,
+                child: Text(
+                  _initials(profile.user),
+                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                    color: colorScheme.primary,
+                    fontWeight: FontWeight.w800,
                   ),
                 ),
-                if (phone != null) ...[
-                  const SizedBox(height: AppSpacing.xxs),
-                  Text(
-                    phone,
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: colorScheme.onPrimary.withValues(alpha: 0.74),
+              ),
+              const SizedBox(width: AppSpacing.md),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      profile.user.fullName,
+                      style: Theme.of(context).textTheme.titleLarge
+                          ?.copyWith(color: colorScheme.onPrimary),
                     ),
-                  ),
-                ],
-              ],
-            ),
-          ),
-          const SizedBox(width: AppSpacing.sm),
-          Container(
-            padding: const EdgeInsets.symmetric(
-              horizontal: AppSpacing.sm,
-              vertical: AppSpacing.xs,
-            ),
-            decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.13),
-              borderRadius: BorderRadius.circular(AppRadii.round),
-              border: Border.all(color: Colors.white.withValues(alpha: 0.24)),
-            ),
-            child: Text(
-              profile.user.status,
-              style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                color: colorScheme.onPrimary,
-                fontWeight: FontWeight.w700,
+                    const SizedBox(height: AppSpacing.xxs),
+                    Text(
+                      profile.user.email,
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: colorScheme.onPrimary.withValues(alpha: 0.86),
+                      ),
+                    ),
+                    if (phone != null) ...[
+                      const SizedBox(height: AppSpacing.xxs),
+                      Text(
+                        phone,
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: colorScheme.onPrimary.withValues(alpha: 0.74),
+                        ),
+                      ),
+                    ],
+                    if (compact) ...[
+                      const SizedBox(height: AppSpacing.sm),
+                      _ProfileStatusChip(status: profile.user.status),
+                    ],
+                  ],
+                ),
               ),
-            ),
-          ),
-        ],
+              if (!compact) ...[
+                const SizedBox(width: AppSpacing.sm),
+                _ProfileStatusChip(status: profile.user.status),
+              ],
+            ],
+          );
+        },
       ),
     );
   }
@@ -265,6 +262,38 @@ class _ProfileIdentityHeader extends StatelessWidget {
     final first = user.firstNames.isEmpty ? '' : user.firstNames[0];
     final last = user.lastNames.isEmpty ? '' : user.lastNames[0];
     return '$first$last'.toUpperCase();
+  }
+}
+
+class _ProfileStatusChip extends StatelessWidget {
+  const _ProfileStatusChip({required this.status});
+
+  final String status;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: Container(
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.sm,
+          vertical: AppSpacing.xs,
+        ),
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: 0.13),
+          borderRadius: BorderRadius.circular(AppRadii.round),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.24)),
+        ),
+        child: Text(
+          status.replaceAll('_', ' '),
+          style: Theme.of(context).textTheme.labelSmall?.copyWith(
+            color: colorScheme.onPrimary,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+      ),
+    );
   }
 }
 

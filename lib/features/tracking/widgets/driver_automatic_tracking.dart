@@ -51,7 +51,7 @@ class _DriverAutomaticTrackingState
       ref.invalidate(activeShiftControllerProvider);
       if (_shiftId case final shiftId?) unawaited(_flush(shiftId));
     }
-    // No detener el stream al abrir Maps, bloquear la pantalla o pasar a
+    // No detener el stream al abrir el mapa integrado, bloquear la pantalla o pasar a
     // segundo plano: la jornada debe conservar su cola GPS.
   }
 
@@ -143,6 +143,9 @@ class _DriverAutomaticTrackingState
     bool force = false,
   }) async {
     if (_shiftId != shiftId) return;
+    ref
+        .read(driverTrackingStatusProvider.notifier)
+        .setCurrentLocation(location);
     final moving = (location.speedMetersPerSecond ?? 0) >= 0.7;
     final cadence = Duration(
       seconds: moving

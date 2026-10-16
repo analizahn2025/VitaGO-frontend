@@ -484,12 +484,13 @@ class _CapturePanel extends StatelessWidget {
       clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: enabled ? onTap : null,
-        child: SizedBox(
-          height: 250,
-          child: photo == null
-              ? Padding(
+        child: photo == null
+            ? ConstrainedBox(
+                constraints: const BoxConstraints(minHeight: 250),
+                child: Padding(
                   padding: const EdgeInsets.all(AppSpacing.xl),
                   child: Column(
+                    mainAxisSize: MainAxisSize.min,
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       Container(
@@ -521,8 +522,11 @@ class _CapturePanel extends StatelessWidget {
                       ),
                     ],
                   ),
-                )
-              : Stack(
+                ),
+              )
+            : SizedBox(
+                height: 250,
+                child: Stack(
                   fit: StackFit.expand,
                   children: [
                     Image.file(
@@ -567,7 +571,7 @@ class _CapturePanel extends StatelessWidget {
                     ),
                   ],
                 ),
-        ),
+              ),
       ),
     );
   }

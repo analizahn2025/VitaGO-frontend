@@ -33,10 +33,29 @@ void main() {
 
     expect(find.text('Permisos vigentes'), findsOneWidget);
   });
+
+  testWidgets('la cabecera se adapta a pantalla angosta con texto grande', (
+    tester,
+  ) async {
+    await _pumpProfile(
+      tester,
+      _longProfile(),
+      size: const Size(320, 700),
+      textScaler: const TextScaler.linear(1.5),
+    );
+
+    expect(find.text('PENDIENTE ACTIVACION'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
 }
 
-Future<void> _pumpProfile(WidgetTester tester, UserProfile profile) async {
-  tester.view.physicalSize = const Size(390, 844);
+Future<void> _pumpProfile(
+  WidgetTester tester,
+  UserProfile profile, {
+  Size size = const Size(390, 844),
+  TextScaler textScaler = TextScaler.noScaling,
+}) async {
+  tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.resetPhysicalSize);
   addTearDown(tester.view.resetDevicePixelRatio);
@@ -46,11 +65,32 @@ Future<void> _pumpProfile(WidgetTester tester, UserProfile profile) async {
       overrides: [authControllerProvider.overrideWith(_FakeAuthController.new)],
       child: MaterialApp(
         theme: AppTheme.forMode(AppMode.corporate),
+        builder: (context, child) => MediaQuery(
+          data: MediaQuery.of(context).copyWith(textScaler: textScaler),
+          child: child!,
+        ),
         home: Scaffold(body: ProfileView(profile: profile)),
       ),
     ),
   );
   await tester.pumpAndSettle();
+}
+
+UserProfile _longProfile() {
+  return UserProfile.fromJson({
+    'usuario': {
+      'id': 'user-id',
+      'correo': 'persona.con.correo.extenso@empresa.com',
+      'nombres': 'María Fernanda',
+      'apellidos': 'Hernández Castellanos',
+      'telefono': '+504 9999-9999',
+      'estado': 'PENDIENTE_ACTIVACION',
+    },
+    'empresa': {'id': 'company-id', 'nombre': 'Analiza'},
+    'sucursal': {'id': 'branch-id', 'nombre': 'Sucursal principal'},
+    'roles': const [],
+    'permisos': const [],
+  });
 }
 
 UserProfile _profile({required bool master}) {

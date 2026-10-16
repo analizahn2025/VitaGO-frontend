@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:url_launcher/url_launcher.dart';
 import 'package:vitago_app/app/theme/app_design_tokens.dart';
 import 'package:vitago_app/core/errors/app_failure.dart';
 import 'package:vitago_app/features/routes/models/driver_route.dart';
 import 'package:vitago_app/features/routes/providers/routes_providers.dart';
+import 'package:vitago_app/features/routes/views/driver_route_map_view.dart';
 
 class DriverRouteSection extends ConsumerStatefulWidget {
   const DriverRouteSection({
@@ -112,13 +112,14 @@ class _DriverRouteSectionState extends ConsumerState<DriverRouteSection> {
                   spacing: AppSpacing.sm,
                   runSpacing: AppSpacing.sm,
                   children: [
-                    FilledButton.icon(
-                      onPressed: route.navigation == null
-                          ? null
-                          : () => _openNavigation(route.navigation!),
-                      icon: const Icon(Icons.navigation_outlined),
-                      label: const Text('Navegar'),
-                    ),
+                    if (route.map.showMap &&
+                        route.map.mode == 'INTEGRADO' &&
+                        route.map.provider == 'GOOGLE_MAPS')
+                      FilledButton.icon(
+                        onPressed: () => _openMap(route, road),
+                        icon: const Icon(Icons.map_outlined),
+                        label: const Text('Ver mapa'),
+                      ),
                     OutlinedButton.icon(
                       onPressed: () => widget.onOpenRequest(next.requestId),
                       icon: const Icon(Icons.receipt_long_outlined),
@@ -143,12 +144,12 @@ class _DriverRouteSectionState extends ConsumerState<DriverRouteSection> {
                   ),
               ],
               if (road.motorcycleWarning case final warning?
-                  when warning.isNotEmpty) ...[
+                  when route.map.showMap && warning.isNotEmpty) ...[
                 const SizedBox(height: AppSpacing.md),
                 _InfoNote(icon: Icons.two_wheeler_outlined, text: warning),
               ],
               if (road.attribution case final attribution?
-                  when attribution.isNotEmpty) ...[
+                  when route.map.showMap && attribution.isNotEmpty) ...[
                 const SizedBox(height: AppSpacing.xs),
                 Text(
                   attribution,
@@ -196,17 +197,13 @@ class _DriverRouteSectionState extends ConsumerState<DriverRouteSection> {
     );
   }
 
-  Future<void> _openNavigation(RouteNavigation navigation) async {
-    setState(() => _actionError = null);
-    final opened = await launchUrl(
-      navigation.url,
-      mode: LaunchMode.externalApplication,
+  Future<void> _openMap(DriverRoute route, RoadRoute roadRoute) async {
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        builder: (context) =>
+            DriverRouteMapView(route: route, roadRoute: roadRoute),
+      ),
     );
-    if (!opened && mounted) {
-      setState(() {
-        _actionError = 'No fue posible abrir la navegación en este teléfono.';
-      });
-    }
   }
 
   Future<void> _confirmCalculation(DriverRoute route, bool retry) async {
@@ -306,7 +303,7 @@ class _RouteStatusPill extends StatelessWidget {
     final (label, color) = switch (status) {
       'CALCULADA' => ('Calculada', colors.primary),
       'CALCULANDO' => ('Calculando', colors.tertiary),
-      'NO_CONFIGURADA' => ('Navegación', colors.secondary),
+      'NO_CONFIGURADA' => ('Sin trazado', colors.secondary),
       'SIN_PARADAS' => ('Sin paradas', colors.outline),
       'SOLO_KILOMETROS' => ('Especial', colors.secondary),
       'FALLIDA' => ('No disponible', colors.error),

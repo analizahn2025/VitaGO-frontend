@@ -1,8 +1,22 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
 }
+
+val localProperties = Properties().apply {
+    val localPropertiesFile = rootProject.file("local.properties")
+    if (localPropertiesFile.exists()) {
+        localPropertiesFile.inputStream().use { load(it) }
+    }
+}
+
+val googleMapsAndroidApiKey =
+    providers.environmentVariable("GOOGLE_MAPS_ANDROID_API_KEY").orNull
+        ?: localProperties.getProperty("google.maps.android.apiKey")
+        ?: ""
 
 android {
     namespace = "com.vitago.vitago_app"
@@ -30,6 +44,7 @@ android {
         // flag during build.
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+        manifestPlaceholders["googleMapsApiKey"] = googleMapsAndroidApiKey
     }
 
     flavorDimensions += "product"

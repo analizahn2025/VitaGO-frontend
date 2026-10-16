@@ -358,10 +358,11 @@ class _OperationsViewState extends ConsumerState<OperationsView>
     return await showDialog<bool>(
           context: context,
           builder: (context) => AlertDialog(
+            scrollable: true,
             icon: const Icon(Icons.my_location_outlined),
             title: const Text('Ubicación durante la jornada'),
             content: const Text(
-              'VitaGo registrará tu ubicación mientras la jornada esté activa, incluso al abrir Maps o apagar la pantalla. Si no hay internet, los puntos se guardarán de forma privada en el teléfono para enviarlos después. Puedes revocar el permiso desde los ajustes del dispositivo, pero no podrás continuar la operación con el GPS apagado.',
+              'VitaGo registrará tu ubicación mientras la jornada esté activa, incluso al usar el mapa integrado o apagar la pantalla. El mapa integrado usa Google Maps y, al abrirlo, Google procesa las coordenadas necesarias para mostrarlo. Si no hay internet, los puntos se guardarán de forma privada en el teléfono para enviarlos después. Puedes revocar el permiso desde los ajustes del dispositivo, pero no podrás continuar la operación con el GPS apagado.',
             ),
             actions: [
               TextButton(

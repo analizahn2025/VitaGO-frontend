@@ -1,5 +1,6 @@
 # Miscellaneous
 *.md
+ios/Flutter/GoogleMaps.xcconfig
 *.class
 *.log
 *.pyc

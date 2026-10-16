@@ -7,17 +7,23 @@ import 'package:vitago_app/features/routes/repositories/routes_repository.dart';
 import 'package:vitago_app/features/routes/widgets/driver_route_section.dart';
 
 void main() {
-  test('interpreta navegación y estado vial sin guardar una clave', () {
-    final route = DriverRoute.fromJson(_routeJson());
+  test(
+    'interpreta el mapa integrado y el estado vial sin navegación externa',
+    () {
+      final route = DriverRoute.fromJson(_routeJson());
 
-    expect(route.nextStop?.title, 'Sucursal Centro');
-    expect(route.stops, hasLength(2));
-    expect(route.navigation?.requiresApiKey, isFalse);
-    expect(route.navigation?.url.host, 'www.google.com');
-    expect(route.roadRoute.status, 'NO_CONFIGURADA');
-    expect(route.roadRoute.metricsInResponse, isFalse);
-    expect(route.roadRoute.canCalculate, isFalse);
-  });
+      expect(route.nextStop?.title, 'Sucursal Centro');
+      expect(route.stops, hasLength(2));
+      expect(route.map.mode, 'INTEGRADO');
+      expect(route.map.provider, 'GOOGLE_MAPS');
+      expect(route.map.showMap, isTrue);
+      expect(route.map.showRoute, isFalse);
+      expect(route.map.allowsExternalNavigation, isFalse);
+      expect(route.roadRoute.status, 'NO_CONFIGURADA');
+      expect(route.roadRoute.metricsInResponse, isFalse);
+      expect(route.roadRoute.canCalculate, isFalse);
+    },
+  );
 
   testWidgets(
     'la tarjeta de ruta no desborda en móvil angosto con texto grande',
@@ -56,11 +62,37 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('Mi ruta'), findsOneWidget);
-      expect(find.text('Navegar'), findsOneWidget);
+      expect(find.text('Ver mapa'), findsOneWidget);
+      expect(find.text('Navegar'), findsNothing);
       expect(find.textContaining('beta'), findsOneWidget);
       expect(tester.takeException(), isNull);
     },
   );
+
+  testWidgets('no ofrece mapa cuando el backend lo oculta', (tester) async {
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          routesRepositoryProvider.overrideWithValue(
+            _RoutesRepository(DriverRoute.fromJson(_routeJson(showMap: false))),
+          ),
+        ],
+        child: MaterialApp(
+          home: Scaffold(
+            body: DriverRouteSection(
+              canCalculate: false,
+              onOpenRequest: (_) {},
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Ver mapa'), findsNothing);
+    expect(find.text('Ver solicitud'), findsOneWidget);
+    expect(find.textContaining('beta'), findsNothing);
+  });
 }
 
 class _RoutesRepository implements RoutesRepository {
@@ -76,7 +108,7 @@ class _RoutesRepository implements RoutesRepository {
       route.roadRoute;
 }
 
-Map<String, dynamic> _routeJson() => {
+Map<String, dynamic> _routeJson({bool showMap = true}) => {
   'repartidor_id': 'driver-id',
   'jornada_id': 'shift-id',
   'ruta_id': 'route-id',
@@ -88,12 +120,12 @@ Map<String, dynamic> _routeJson() => {
     _stop(1, 'RECOLECCION', 'Sucursal Centro'),
     _stop(2, 'ENTREGA', 'Sucursal Norte'),
   ],
-  'navegacion': {
+  'mapa': {
+    'modo': 'INTEGRADO',
     'proveedor': 'GOOGLE_MAPS',
-    'requiere_clave_api': false,
-    'solicitud_id': 'request-id',
-    'tipo_parada': 'RECOLECCION',
-    'url': 'https://www.google.com/maps/dir/?api=1&destination=14.072300%2C-87.192100&travelmode=two-wheeler',
+    'mostrar_mapa': showMap,
+    'mostrar_trazado': false,
+    'permite_navegacion_externa': false,
   },
   'ruta_vial': {
     'estado': 'NO_CONFIGURADA',

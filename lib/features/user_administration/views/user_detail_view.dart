@@ -122,12 +122,15 @@ class _UserDetailContent extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    'Información de acceso',
-                    style: Theme.of(context).textTheme.titleLarge,
+                  Expanded(
+                    child: Text(
+                      'Información de acceso',
+                      style: Theme.of(context).textTheme.titleLarge,
+                    ),
                   ),
-                  const Spacer(),
+                  const SizedBox(width: AppSpacing.sm),
                   _StatusChip(status: user.status),
                 ],
               ),

@@ -16,6 +16,7 @@ import 'package:vitago_app/features/authentication/views/authenticated_home_view
 import 'package:vitago_app/features/profile/controllers/profile_controller.dart';
 import 'package:vitago_app/features/user_administration/controllers/users_controller.dart';
 import 'package:vitago_app/features/user_administration/models/managed_user.dart';
+import 'package:vitago_app/features/user_administration/views/user_detail_view.dart';
 import 'package:vitago_app/features/user_administration/views/users_view.dart';
 
 void main() {
@@ -284,6 +285,52 @@ void main() {
     expect(restoredOffset, closeTo(previousOffset, 0.1));
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets(
+    'el detalle de usuario no se desborda en pantalla angosta con texto grande',
+    (tester) async {
+      tester.view.physicalSize = const Size(320, 700);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      const user = ManagedUser(
+        id: 'managed-user-id',
+        email: 'persona.con.correo.extenso@empresa.com',
+        firstNames: 'Ana María',
+        lastNames: 'López Hernández',
+        status: 'ACTIVO',
+        roles: [],
+      );
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            userDetailControllerProvider(user.id)
+                .overrideWith((ref) async => user),
+          ],
+          child: MaterialApp(
+            home: Builder(
+              builder: (context) => MediaQuery(
+                data: MediaQuery.of(context)
+                    .copyWith(textScaler: const TextScaler.linear(1.5)),
+                child: UserDetailView(
+                  userId: user.id,
+                  profile: _profileWithPermissions(const []),
+                  usesLocalAuthentication: true,
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Información de acceso'), findsOneWidget);
+      expect(find.text('ACTIVO'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
 }
 
 class _ResolvedProfileController extends ProfileController {

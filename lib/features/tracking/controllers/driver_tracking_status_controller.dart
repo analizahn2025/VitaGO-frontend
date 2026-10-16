@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:vitago_app/core/device/device_location_service.dart';
 
 final driverTrackingStatusProvider =
     NotifierProvider<DriverTrackingStatusController, DriverTrackingStatus>(
@@ -10,6 +11,7 @@ class DriverTrackingStatus {
     this.active = false,
     this.sending = false,
     this.lastSyncedAt,
+    this.lastLocation,
     this.pendingPoints = 0,
     this.error,
   });
@@ -17,6 +19,7 @@ class DriverTrackingStatus {
   final bool active;
   final bool sending;
   final DateTime? lastSyncedAt;
+  final DeviceLocation? lastLocation;
   final int pendingPoints;
   final String? error;
 
@@ -24,6 +27,7 @@ class DriverTrackingStatus {
     bool? active,
     bool? sending,
     DateTime? lastSyncedAt,
+    DeviceLocation? lastLocation,
     int? pendingPoints,
     String? error,
     bool clearError = false,
@@ -32,6 +36,7 @@ class DriverTrackingStatus {
       active: active ?? this.active,
       sending: sending ?? this.sending,
       lastSyncedAt: lastSyncedAt ?? this.lastSyncedAt,
+      lastLocation: lastLocation ?? this.lastLocation,
       pendingPoints: pendingPoints ?? this.pendingPoints,
       error: clearError ? null : error ?? this.error,
     );
@@ -62,6 +67,10 @@ class DriverTrackingStatusController extends Notifier<DriverTrackingStatus> {
 
   void setPendingPoints(int value) {
     state = state.copyWith(pendingPoints: value);
+  }
+
+  void setCurrentLocation(DeviceLocation value) {
+    state = state.copyWith(active: true, lastLocation: value, clearError: true);
   }
 
   void reportError(String message) {

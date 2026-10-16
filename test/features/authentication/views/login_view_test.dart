@@ -60,9 +60,31 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Iniciar sesión'), findsOneWidget);
   });
+
+  testWidgets('se adapta a pantalla angosta con texto grande', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(320, 700));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await _pumpLogin(
+      tester,
+      AppMode.corporate,
+      textScaler: const TextScaler.linear(1.5),
+    );
+
+    final tagline = tester.getRect(
+      find.text('Logística clínica, en movimiento.'),
+    );
+    final brand = tester.getRect(find.byKey(const Key('corporate_brand_mark')));
+    expect(tagline.bottom, lessThan(brand.top));
+    expect(tester.takeException(), isNull);
+  });
 }
 
-Future<void> _pumpLogin(WidgetTester tester, AppMode mode) async {
+Future<void> _pumpLogin(
+  WidgetTester tester,
+  AppMode mode, {
+  TextScaler textScaler = TextScaler.noScaling,
+}) async {
   final config = AppConfig(
     mode: mode,
     apiBaseUri: Uri.parse('https://api.example.com/api/v1/'),
@@ -76,6 +98,10 @@ Future<void> _pumpLogin(WidgetTester tester, AppMode mode) async {
       ],
       child: MaterialApp(
         theme: AppTheme.forMode(mode),
+        builder: (context, child) => MediaQuery(
+          data: MediaQuery.of(context).copyWith(textScaler: textScaler),
+          child: child!,
+        ),
         home: const LoginView(),
       ),
     ),

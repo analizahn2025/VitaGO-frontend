@@ -6,17 +6,16 @@ class DriverRoute {
     required this.orderType,
     required this.routeCalculated,
     required this.stops,
+    required this.map,
     required this.roadRoute,
     this.shiftId,
     this.routeId,
     this.currentVersion,
     this.nextStop,
-    this.navigation,
   });
 
   factory DriverRoute.fromJson(Map<String, dynamic> json) {
     final nextStop = optionalJsonMap(json, 'proxima_parada');
-    final navigation = optionalJsonMap(json, 'navegacion');
     return DriverRoute(
       driverId: requireString(json, 'repartidor_id'),
       shiftId: optionalString(json, 'jornada_id'),
@@ -31,9 +30,7 @@ class DriverRoute {
         json['paradas'],
         'paradas de la ruta',
       ).map(DriverRouteStop.fromJson).toList(growable: false),
-      navigation: navigation == null
-          ? null
-          : RouteNavigation.fromJson(navigation),
+      map: RouteMapConfiguration.fromJson(requireJsonMap(json['mapa'], 'mapa')),
       roadRoute: RoadRoute.fromJson(
         requireJsonMap(json['ruta_vial'], 'ruta_vial'),
       ),
@@ -48,7 +45,7 @@ class DriverRoute {
   final bool routeCalculated;
   final DriverRouteStop? nextStop;
   final List<DriverRouteStop> stops;
-  final RouteNavigation? navigation;
+  final RouteMapConfiguration map;
   final RoadRoute roadRoute;
 }
 
@@ -124,30 +121,33 @@ class RouteLocation {
   final String longitude;
 }
 
-class RouteNavigation {
-  const RouteNavigation({
+class RouteMapConfiguration {
+  const RouteMapConfiguration({
+    required this.mode,
     required this.provider,
-    required this.requiresApiKey,
-    required this.requestId,
-    required this.stopType,
-    required this.url,
+    required this.showMap,
+    required this.showRoute,
+    required this.allowsExternalNavigation,
   });
 
-  factory RouteNavigation.fromJson(Map<String, dynamic> json) {
-    return RouteNavigation(
+  factory RouteMapConfiguration.fromJson(Map<String, dynamic> json) {
+    return RouteMapConfiguration(
+      mode: requireString(json, 'modo'),
       provider: requireString(json, 'proveedor'),
-      requiresApiKey: optionalBool(json, 'requiere_clave_api'),
-      requestId: requireString(json, 'solicitud_id'),
-      stopType: requireString(json, 'tipo_parada'),
-      url: Uri.parse(requireString(json, 'url')),
+      showMap: optionalBool(json, 'mostrar_mapa'),
+      showRoute: optionalBool(json, 'mostrar_trazado'),
+      allowsExternalNavigation: optionalBool(
+        json,
+        'permite_navegacion_externa',
+      ),
     );
   }
 
+  final String mode;
   final String provider;
-  final bool requiresApiKey;
-  final String requestId;
-  final String stopType;
-  final Uri url;
+  final bool showMap;
+  final bool showRoute;
+  final bool allowsExternalNavigation;
 }
 
 class RoadRoute {
