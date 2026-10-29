@@ -1,4 +1,5 @@
 import 'package:vitago_app/core/models/json_readers.dart';
+import 'package:vitago_app/features/organizations/models/driver_limits.dart';
 
 class Company {
   const Company({
@@ -10,10 +11,12 @@ class Company {
     this.phone,
     this.email,
     this.country,
+    this.driverLimits,
   });
 
   factory Company.fromJson(Map<String, dynamic> json) {
     final countryJson = optionalJsonMap(json, 'pais');
+    final limitsJson = optionalJsonMap(json, 'limites_motoristas');
     return Company(
       id: requireString(json, 'id'),
       name: requireString(json, 'nombre'),
@@ -23,6 +26,9 @@ class Company {
       email: optionalString(json, 'correo'),
       country: countryJson == null ? null : Country.fromJson(countryJson),
       status: requireString(json, 'estado'),
+      driverLimits: limitsJson == null
+          ? null
+          : DriverLimits.fromJson(limitsJson),
     );
   }
 
@@ -34,6 +40,7 @@ class Company {
   final String? email;
   final Country? country;
   final String status;
+  final DriverLimits? driverLimits;
 }
 
 class Country {

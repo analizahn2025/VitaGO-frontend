@@ -1,17 +1,38 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:vitago_app/app/config/app_config.dart';
+import 'package:vitago_app/core/permissions/administrative_scope.dart';
+import 'package:vitago_app/features/fleet/views/driver_reports_view.dart';
 import 'package:vitago_app/core/permissions/app_permissions.dart';
 import 'package:vitago_app/core/widgets/async_state_view.dart';
 import 'package:vitago_app/features/fleet/views/drivers_view.dart';
 import 'package:vitago_app/features/fleet/views/vehicles_view.dart';
 import 'package:vitago_app/features/profile/models/user_profile.dart';
 
-class FleetView extends StatelessWidget {
+class FleetView extends ConsumerWidget {
   const FleetView({required this.profile, super.key});
 
   final UserProfile profile;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final reportsAllowed = canViewDriverReports(
+      profile,
+      corporate: ref.watch(appConfigProvider).isCorporate,
+      companyId: profile.company?.id,
+    );
+    final actions = <Widget>[
+      if (reportsAllowed)
+        IconButton(
+          tooltip: 'Reportes de motoristas',
+          icon: const Icon(Icons.assessment_outlined),
+          onPressed: () => Navigator.of(context).push<void>(
+            MaterialPageRoute(
+              builder: (_) => DriverReportsView(profile: profile),
+            ),
+          ),
+        ),
+    ];
     final canViewVehicles = profile.can(AppPermissions.viewVehicles);
     final canViewDrivers = profile.can(AppPermissions.viewDrivers);
     if (!canViewVehicles && !canViewDrivers) {
@@ -39,7 +60,10 @@ class FleetView extends StatelessWidget {
 
     if (views.length == 1) {
       return Scaffold(
-        appBar: AppBar(title: Text(tabs.single.text ?? 'Flota')),
+        appBar: AppBar(
+          title: Text(tabs.single.text ?? 'Flota'),
+          actions: actions,
+        ),
         body: SafeArea(child: views.single),
       );
     }
@@ -48,6 +72,7 @@ class FleetView extends StatelessWidget {
       child: Scaffold(
         appBar: AppBar(
           title: const Text('Flota y motoristas'),
+          actions: actions,
           bottom: TabBar(tabs: tabs),
         ),
         body: SafeArea(child: TabBarView(children: views)),

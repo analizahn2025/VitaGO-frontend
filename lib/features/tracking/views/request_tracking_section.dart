@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:vitago_app/app/theme/app_design_tokens.dart';
 import 'package:vitago_app/core/formatters/app_date_format.dart';
 import 'package:vitago_app/features/tracking/controllers/tracking_controller.dart';
+import 'package:vitago_app/features/tracking/providers/tracking_providers.dart';
 
 class RequestTrackingSection extends ConsumerStatefulWidget {
   const RequestTrackingSection({required this.requestId, super.key});
@@ -36,6 +37,9 @@ class _RequestTrackingSectionState
 
   @override
   Widget build(BuildContext context) {
+    final operationalTimeZone = ref
+        .watch(serverTimeClockProvider)
+        .operationalTimeZone;
     final tracking = ref.watch(
       requestTrackingControllerProvider(widget.requestId),
     );
@@ -83,7 +87,7 @@ class _RequestTrackingSectionState
                       Text(
                         point == null
                             ? 'Todavía no hay una ubicación operativa.'
-                            : '${point.latitude}, ${point.longitude}\n${AppDateFormat.dateTime(point.recordedAt)}',
+                            : '${point.latitude}, ${point.longitude}\n${AppDateFormat.dateTime(point.recordedAt, timeZone: operationalTimeZone)}',
                       ),
                     ],
                   ),

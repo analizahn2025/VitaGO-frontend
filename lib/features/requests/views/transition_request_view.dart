@@ -1,14 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:uuid/uuid.dart';
 import 'package:vitago_app/app/theme/app_design_tokens.dart';
 import 'package:vitago_app/core/device/device_location_service.dart';
 import 'package:vitago_app/core/errors/app_failure.dart';
-import 'package:vitago_app/features/requests/controllers/requests_controller.dart';
-import 'package:vitago_app/features/requests/models/request_inputs.dart';
+import 'package:vitago_app/features/requests/controllers/request_stage_controller.dart';
 import 'package:vitago_app/features/requests/models/request_models.dart';
-import 'package:vitago_app/features/tracking/controllers/tracking_controller.dart';
-import 'package:vitago_app/features/tracking/models/tracking_point.dart';
 import 'package:vitago_app/features/tracking/providers/tracking_providers.dart';
 import 'package:vitago_app/features/tracking/widgets/required_gps_body.dart';
 
@@ -30,6 +26,10 @@ class TransitionRequestView extends ConsumerStatefulWidget {
 }
 
 class _TransitionRequestViewState extends ConsumerState<TransitionRequestView> {
+  String _actionLabel(String status) =>
+      widget.request.isSpecial && status == 'AT_DESTINATION'
+      ? 'Finalizar encargo'
+      : requestTransitionActionLabel(status);
   final _formKey = GlobalKey<FormState>();
   final _reason = TextEditingController();
   String? _targetStatus;
@@ -52,10 +52,6 @@ class _TransitionRequestViewState extends ConsumerState<TransitionRequestView> {
             'DELIVERED',
             'DELIVERY_FAILED',
           }.contains(_targetStatus));
-
-  bool get _closesSpecialMovement =>
-      widget.request.isSpecial &&
-      const {'DELIVERED', 'DELIVERY_FAILED'}.contains(_targetStatus);
 
   @override
   void initState() {
@@ -117,7 +113,7 @@ class _TransitionRequestViewState extends ConsumerState<TransitionRequestView> {
                       labelText: 'Siguiente paso',
                     ),
                     child: Text(
-                      requestTransitionActionLabel(_targetStatus!),
+                      _actionLabel(_targetStatus!),
                       style: Theme.of(context).textTheme.titleMedium,
                     ),
                   )
@@ -129,7 +125,7 @@ class _TransitionRequestViewState extends ConsumerState<TransitionRequestView> {
                         .map(
                           (status) => DropdownMenuItem(
                             value: status,
-                            child: Text(requestTransitionActionLabel(status)),
+                            child: Text(_actionLabel(status)),
                           ),
                         )
                         .toList(growable: false),
@@ -196,7 +192,7 @@ class _TransitionRequestViewState extends ConsumerState<TransitionRequestView> {
                   label: Text(
                     _targetStatus == null
                         ? 'Guardar cambio'
-                        : requestTransitionActionLabel(_targetStatus!),
+                        : _actionLabel(_targetStatus!),
                   ),
                 ),
               ],
@@ -240,19 +236,13 @@ class _TransitionRequestViewState extends ConsumerState<TransitionRequestView> {
       _error = null;
     });
     try {
-      if (_closesSpecialMovement) {
-        await _sendFinalTrackingPoint();
-      }
       final updated = await ref
-          .read(requestActionsControllerProvider)
-          .transition(
-            widget.request.id,
-            RequestTransitionInput(
-              targetStatus: _targetStatus!,
-              latitude: _location?.latitudeText,
-              longitude: _location?.longitudeText,
-              reason: _reason.text,
-            ),
+          .read(requestStageActionsControllerProvider)
+          .completeTransition(
+            request: widget.request,
+            targetStatus: _targetStatus!,
+            location: _location!,
+            reason: _reason.text,
           );
       if (updated.status.toUpperCase() != _targetStatus!.toUpperCase()) {
         throw AppFailure(
@@ -269,36 +259,11 @@ class _TransitionRequestViewState extends ConsumerState<TransitionRequestView> {
   }
 
   String _failureMessage(AppFailure failure) {
+    final message =
+        failure.fieldMessage('estado_destino') ??
+        failure.fieldMessage('jornada') ??
+        failure.message;
     final code = failure.statusCode;
-    return code == null ? failure.message : '${failure.message} (HTTP $code)';
-  }
-
-  Future<void> _sendFinalTrackingPoint() async {
-    final movement = widget.request.specialMovement;
-    final location = _location;
-    if (movement == null || location == null) {
-      throw const AppFailure(
-        message: 'No se encontró el recorrido especial activo. Actualiza la solicitud e inténtalo de nuevo.',
-      );
-    }
-    await ref
-        .read(trackingActionsControllerProvider)
-        .register(
-          TrackingBatchInput(
-            shiftId: movement.shiftId,
-            points: [
-              TrackingPointInput(
-                clientId: const Uuid().v4(),
-                latitude: location.latitudeText,
-                longitude: location.longitudeText,
-                accuracyMeters: location.accuracyMeters?.toStringAsFixed(2),
-                speedMetersPerSecond: location.speedMetersPerSecond
-                    ?.toStringAsFixed(2),
-                headingDegrees: location.headingDegrees?.toStringAsFixed(2),
-                recordedAt: location.recordedAt,
-              ),
-            ],
-          ),
-        );
+    return code == null ? message : '$message (HTTP $code)';
   }
 }

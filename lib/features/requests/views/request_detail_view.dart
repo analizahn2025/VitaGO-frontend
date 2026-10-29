@@ -9,13 +9,13 @@ import 'package:vitago_app/features/evidence/controllers/evidence_controller.dar
 import 'package:vitago_app/features/evidence/views/add_request_evidence_view.dart';
 import 'package:vitago_app/features/evidence/views/request_evidence_section.dart';
 import 'package:vitago_app/features/profile/models/user_profile.dart';
-import 'package:vitago_app/features/requests/controllers/request_stage_controller.dart';
 import 'package:vitago_app/features/requests/controllers/requests_controller.dart';
 import 'package:vitago_app/features/requests/models/request_models.dart';
 import 'package:vitago_app/features/requests/views/assign_request_view.dart';
+import 'package:vitago_app/features/requests/views/update_request_tube_count_view.dart';
 import 'package:vitago_app/features/requests/views/cancel_request_dialog.dart';
-import 'package:vitago_app/features/requests/views/confirm_request_stage_view.dart';
-import 'package:vitago_app/features/requests/views/transition_request_view.dart';
+import 'package:vitago_app/features/requests/views/widgets/driver_request_actions.dart';
+import 'package:vitago_app/features/shifts/controllers/shifts_controller.dart';
 import 'package:vitago_app/features/tracking/views/request_tracking_section.dart';
 import 'package:vitago_app/features/tracking/widgets/required_gps_body.dart';
 
@@ -72,52 +72,28 @@ class _RequestDetailContent extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final summary = request.summary;
     final colors = Theme.of(context).colorScheme;
-    final canViewEvidence = profile.can(AppPermissions.viewEvidence);
-    final evidenceAsync = canViewEvidence
-        ? ref.watch(
-            requestEvidenceControllerProvider((ownerId: request.id, page: 1)),
-          )
+    final activeShift = profile.isDriver
+        ? ref.watch(activeShiftControllerProvider)
         : null;
-    final evidenceTypesRecorded =
-        evidenceAsync?.value?.items
-            .map((item) => item.type)
-            .whereType<String>()
-            .map((type) => type.toUpperCase())
-            .toSet() ??
-        const <String>{};
-    final evidenceReady = evidenceAsync == null || evidenceAsync.hasValue;
-    final allowedTransitions = _allowedTransitions(
-      evidenceReady: evidenceReady,
-    );
+    final hasActiveShift = !profile.isDriver || activeShift?.value != null;
+    final canViewEvidence = profile.can(AppPermissions.viewEvidence);
     final canCancel =
         profile.can(AppPermissions.cancelRequests) &&
         requestIsCancellable(request.status);
-    final operationalTransitions = allowedTransitions
-        .where((status) => status != 'CANCELLED')
-        .toList(growable: false);
     final canAssign =
         request.status == 'PENDING' &&
         profile.can(AppPermissions.assignRequests);
     final canReassign =
-        request.status == 'ASSIGNED' &&
+        (request.status == 'ASSIGNED' || summary.pendingReassignment) &&
         profile.can(AppPermissions.reassignRequests);
-    final evidenceTypes = _availableEvidenceTypes(request.status);
+    // Operational photos belong only to the server-selected automatic screen.
+    final evidenceTypes = _availableEvidenceTypes(request.status)
+        .where((type) => type == 'FOTO_INCIDENCIA')
+        .toList(growable: false);
     final canAddEvidence =
         profile.isDriver &&
         profile.can(AppPermissions.createEvidence) &&
         evidenceTypes.isNotEmpty;
-    final primaryStatus = profile.isDriver
-        ? requestNextOperationalStatus(request.status)
-        : null;
-    final primaryTransition =
-        primaryStatus != null && operationalTransitions.contains(primaryStatus)
-        ? primaryStatus
-        : null;
-    final exceptionTransitions = profile.isDriver
-        ? operationalTransitions
-              .where((status) => status != primaryTransition)
-              .toList(growable: false)
-        : const <String>[];
 
     return RefreshIndicator(
       onRefresh: () async => onChanged(),
@@ -145,7 +121,10 @@ class _RequestDetailContent extends ConsumerWidget {
                             ?.copyWith(color: colors.onPrimary),
                       ),
                     ),
-                    StatusBadge(status: request.status),
+                    StatusBadge(
+                      status: request.status,
+                      label: summary.displayStatusLabel,
+                    ),
                   ],
                 ),
                 const SizedBox(height: AppSpacing.sm),
@@ -195,6 +174,48 @@ class _RequestDetailContent extends ConsumerWidget {
                   destination: summary.destination,
                   specialDestination: summary.specialDestination,
                 ),
+                const SizedBox(height: AppSpacing.md),
+                Text(
+                  'Cantidad de tubos: ${summary.tubeCount ?? 'Sin declarar'}',
+                ),
+                if (canUpdateRequestTubeCount(request, profile))
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: TextButton.icon(
+                      icon: const Icon(Icons.edit_outlined),
+                      label: Text(
+                        summary.tubeCount == null
+                            ? 'Declarar cantidad de tubos'
+                            : 'Corregir cantidad de tubos',
+                      ),
+                      onPressed: () async {
+                        final updated = await Navigator.of(context).push<bool>(
+                          MaterialPageRoute(
+                            builder: (_) => UpdateRequestTubeCountView(
+                              request: request,
+                              profile: profile,
+                            ),
+                          ),
+                        );
+                        if (updated == true) onChanged();
+                      },
+                    ),
+                  ),
+                if (summary.pendingReassignment) ...[
+                  const SizedBox(height: AppSpacing.lg),
+                  const _PendingReassignmentNotice(),
+                ],
+                if (summary.closedAt != null ||
+                    summary.closureReason != null) ...[
+                  const SizedBox(height: AppSpacing.lg),
+                  _ClosureNotice(summary: summary),
+                ],
+                if (profile.isDriver &&
+                    !hasActiveShift &&
+                    !request.isTerminal) ...[
+                  const SizedBox(height: AppSpacing.lg),
+                  _StartShiftNotice(onStart: () => Navigator.of(context).pop()),
+                ],
                 if (summary.isPriority &&
                     const {
                       'PICKED_UP',
@@ -219,8 +240,7 @@ class _RequestDetailContent extends ConsumerWidget {
                 ],
                 if (canAssign ||
                     canReassign ||
-                    primaryTransition != null ||
-                    exceptionTransitions.isNotEmpty ||
+                    (profile.isDriver && !request.isTerminal) ||
                     canCancel) ...[
                   const SizedBox(height: AppSpacing.xl),
                   Text(
@@ -228,59 +248,47 @@ class _RequestDetailContent extends ConsumerWidget {
                     style: Theme.of(context).textTheme.titleLarge,
                   ),
                   const SizedBox(height: AppSpacing.sm),
-                  Wrap(
-                    spacing: AppSpacing.sm,
-                    runSpacing: AppSpacing.sm,
-                    children: [
-                      if (canAssign || canReassign)
-                        FilledButton.tonalIcon(
-                          onPressed: () => _openAssignment(context),
-                          icon: const Icon(Icons.assignment_ind_outlined),
-                          label: Text(
-                            canAssign ? 'Asignar motorista' : 'Reasignar',
+                  if (canAssign ||
+                      canReassign ||
+                      (!profile.isDriver && canCancel))
+                    Wrap(
+                      spacing: AppSpacing.sm,
+                      runSpacing: AppSpacing.sm,
+                      children: [
+                        if (canAssign || canReassign)
+                          FilledButton.tonalIcon(
+                            onPressed: () => _openAssignment(context),
+                            icon: const Icon(Icons.assignment_ind_outlined),
+                            label: Text(
+                              summary.pendingReassignment
+                                  ? 'Asignar reemplazo'
+                                  : canAssign
+                                  ? 'Asignar motorista'
+                                  : 'Reasignar',
+                            ),
                           ),
-                        ),
-                      if (primaryTransition case final targetStatus?)
-                        FilledButton.icon(
-                          onPressed: () => _openPrimaryTransition(
-                            context,
-                            ref,
-                            targetStatus,
-                            evidenceTypesRecorded,
+                        if (!profile.isDriver && canCancel)
+                          OutlinedButton.icon(
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: colors.error,
+                              side: BorderSide(color: colors.error),
+                            ),
+                            onPressed: () => _openCancellation(context, ref),
+                            icon: const Icon(Icons.cancel_outlined),
+                            label: const Text('Cancelar envío'),
                           ),
-                          icon: const Icon(Icons.arrow_forward),
-                          label: Text(
-                            requestTransitionActionLabel(targetStatus),
-                          ),
-                        ),
-                      if (exceptionTransitions.isNotEmpty)
-                        OutlinedButton.icon(
-                          onPressed: () => _openTransition(
-                            context,
-                            ref,
-                            exceptionTransitions,
-                          ),
-                          icon: const Icon(Icons.report_problem_outlined),
-                          label: Text(
-                            exceptionTransitions.length == 1
-                                ? requestTransitionActionLabel(
-                                    exceptionTransitions.single,
-                                  )
-                                : 'Reportar problema',
-                          ),
-                        ),
-                      if (canCancel)
-                        OutlinedButton.icon(
-                          style: OutlinedButton.styleFrom(
-                            foregroundColor: colors.error,
-                            side: BorderSide(color: colors.error),
-                          ),
-                          onPressed: () => _openCancellation(context, ref),
-                          icon: const Icon(Icons.cancel_outlined),
-                          label: const Text('Cancelar envío'),
-                        ),
-                    ],
-                  ),
+                      ],
+                    ),
+                  if (profile.isDriver) ...[
+                    if (canAssign || canReassign)
+                      const SizedBox(height: AppSpacing.sm),
+                    DriverRequestActions(
+                      request: request,
+                      profile: profile,
+                      onCompleted: (updated) async =>
+                          _handleCompletedTransition(context, ref, updated),
+                    ),
+                  ],
                 ],
                 if (profile.can(AppPermissions.viewRequestTracking)) ...[
                   const SizedBox(height: AppSpacing.xl),
@@ -361,26 +369,6 @@ class _RequestDetailContent extends ConsumerWidget {
     );
   }
 
-  List<String> _allowedTransitions({required bool evidenceReady}) {
-    final raw = requestTransitionMatrix[request.status] ?? const <String>[];
-    return raw
-        .where((target) {
-          if (target == 'CANCELLED') {
-            return profile.can(AppPermissions.cancelRequests);
-          }
-          if (!profile.isDriver ||
-              !profile.can(AppPermissions.updateRequestStatus)) {
-            return false;
-          }
-          if (!evidenceReady &&
-              (target == 'PICKED_UP' || target == 'DELIVERED')) {
-            return false;
-          }
-          return true;
-        })
-        .toList(growable: false);
-  }
-
   Future<void> _openAssignment(BuildContext context) async {
     final changed = await Navigator.of(context).push<bool>(
       MaterialPageRoute<bool>(
@@ -403,56 +391,6 @@ class _RequestDetailContent extends ConsumerWidget {
         const SnackBar(content: Text('Envío cancelado correctamente.')),
       );
     }
-  }
-
-  Future<void> _openTransition(
-    BuildContext context,
-    WidgetRef ref,
-    List<String> allowed,
-  ) async {
-    final updated = await Navigator.of(context).push<ServiceRequestDetail>(
-      MaterialPageRoute<ServiceRequestDetail>(
-        builder: (context) => TransitionRequestView(
-          request: request,
-          allowedStatuses: allowed,
-          gpsRequired: profile.isDriver,
-        ),
-      ),
-    );
-    if (updated == null || !context.mounted) return;
-    _handleCompletedTransition(context, ref, updated);
-  }
-
-  Future<void> _openPrimaryTransition(
-    BuildContext context,
-    WidgetRef ref,
-    String targetStatus,
-    Set<String> evidenceTypesRecorded,
-  ) async {
-    final requiredType = requestRequiredEvidenceType(targetStatus);
-    final ServiceRequestDetail? updated;
-    if (requiredType != null && !evidenceTypesRecorded.contains(requiredType)) {
-      updated = await Navigator.of(context).push<ServiceRequestDetail>(
-        MaterialPageRoute<ServiceRequestDetail>(
-          builder: (context) => ConfirmRequestStageView(
-            request: request,
-            targetStatus: targetStatus,
-          ),
-        ),
-      );
-    } else {
-      updated = await Navigator.of(context).push<ServiceRequestDetail>(
-        MaterialPageRoute<ServiceRequestDetail>(
-          builder: (context) => TransitionRequestView(
-            request: request,
-            allowedStatuses: [targetStatus],
-            gpsRequired: profile.isDriver,
-          ),
-        ),
-      );
-    }
-    if (updated == null || !context.mounted) return;
-    _handleCompletedTransition(context, ref, updated);
   }
 
   void _handleCompletedTransition(
@@ -584,6 +522,102 @@ class _SpecialDestinationText extends StatelessWidget {
   }
 }
 
+class _PendingReassignmentNotice extends StatelessWidget {
+  const _PendingReassignmentNotice();
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.md),
+      decoration: BoxDecoration(
+        color: colors.tertiaryContainer,
+        borderRadius: BorderRadius.circular(AppRadii.control),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(Icons.person_search_outlined, color: colors.onTertiaryContainer),
+          const SizedBox(width: AppSpacing.sm),
+          Expanded(
+            child: Text(
+              'Pendiente de reasignación. El estado del servicio se conserva hasta encontrar otro motorista.',
+              style: TextStyle(
+                color: colors.onTertiaryContainer,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ClosureNotice extends StatelessWidget {
+  const _ClosureNotice({required this.summary});
+
+  final ServiceRequestSummary summary;
+
+  @override
+  Widget build(BuildContext context) {
+    final endOfDay = summary.closedAtEndOfDay;
+    return ListTile(
+      contentPadding: EdgeInsets.zero,
+      leading: Icon(
+        endOfDay ? Icons.nights_stay_outlined : Icons.event_available_outlined,
+      ),
+      title: Text(
+        endOfDay ? 'Cierre automático de fin de día' : 'Servicio cerrado',
+      ),
+      subtitle: Text(
+        summary.closedAt == null
+            ? 'Motivo: ${summary.closureReason ?? 'No informado'}'
+            : '${AppDateFormat.dateTime(summary.closedAt!)}${summary.closureReason == null ? '' : '\nMotivo: ${summary.closureReason}'}',
+      ),
+    );
+  }
+}
+
+class _StartShiftNotice extends StatelessWidget {
+  const _StartShiftNotice({required this.onStart});
+
+  final VoidCallback onStart;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.md),
+      decoration: BoxDecoration(
+        color: colors.errorContainer,
+        borderRadius: BorderRadius.circular(AppRadii.control),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            'Inicia tu jornada para continuar',
+            style: Theme.of(context).textTheme.titleMedium
+                ?.copyWith(color: colors.onErrorContainer),
+          ),
+          const SizedBox(height: AppSpacing.xs),
+          Text(
+            'El servicio no cambiará de estado hasta que tengas una jornada activa.',
+            style: TextStyle(color: colors.onErrorContainer),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          FilledButton.tonalIcon(
+            onPressed: onStart,
+            icon: const Icon(Icons.play_circle_outline),
+            label: const Text('Ir a iniciar jornada'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _SpecialMovementSection extends StatelessWidget {
   const _SpecialMovementSection({required this.request});
 
@@ -593,6 +627,7 @@ class _SpecialMovementSection extends StatelessWidget {
   Widget build(BuildContext context) {
     final summary = request.summary;
     final movement = request.specialMovement;
+    final movements = request.specialMovements;
     final kilometers =
         summary.specialKilometers ?? movement?.traveledKilometers;
     final colors = Theme.of(context).colorScheme;
@@ -628,6 +663,32 @@ class _SpecialMovementSection extends StatelessWidget {
                     '${movement.recordsDiscarded == 0 ? '' : ' · ${movement.recordsDiscarded} descartados'}',
                     style: Theme.of(context).textTheme.bodySmall,
                   ),
+                  if (movement.closureReason case final reason?) ...[
+                    const SizedBox(height: AppSpacing.xxs),
+                    Text(
+                      'Cierre del último tramo: ${_movementClosureLabel(reason)}',
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                  ],
+                ],
+                if (movements.length > 1) ...[
+                  const SizedBox(height: AppSpacing.sm),
+                  ExpansionTile(
+                    tilePadding: EdgeInsets.zero,
+                    childrenPadding: EdgeInsets.zero,
+                    title: Text('${movements.length} tramos del recorrido'),
+                    children: [
+                      for (var index = 0; index < movements.length; index++)
+                        ListTile(
+                          contentPadding: EdgeInsets.zero,
+                          dense: true,
+                          title: Text('Tramo ${movements.length - index}'),
+                          subtitle: Text(
+                            _movementDescription(movements[index]),
+                          ),
+                        ),
+                    ],
+                  ),
                 ],
               ],
             ),
@@ -636,6 +697,24 @@ class _SpecialMovementSection extends StatelessWidget {
       ),
     );
   }
+
+  String _movementDescription(SpecialRequestMovement movement) {
+    final parts = <String>[
+      movement.traveledKilometers == null
+          ? 'Kilometraje pendiente'
+          : '${movement.traveledKilometers} km',
+      if (movement.closureReason != null)
+        _movementClosureLabel(movement.closureReason!),
+      '${movement.recordsConsidered} puntos válidos',
+    ];
+    return parts.join(' · ');
+  }
+
+  String _movementClosureLabel(String reason) => switch (reason.toUpperCase()) {
+    'SUSPENSION' => 'Cambio de motorista',
+    'FIN_DIA' => 'Fin de día',
+    _ => reason.replaceAll('_', ' ').toLowerCase(),
+  };
 }
 
 class _PriorityDirectNotice extends StatelessWidget {
@@ -750,6 +829,8 @@ String _eventLabel(String type) => switch (type) {
   'CREADA' => 'Solicitud creada',
   'ASIGNADA' => 'Motorista asignado',
   'REASIGNADA' => 'Motorista reasignado',
+  'REASIGNACION_PENDIENTE' => 'Pendiente de reasignación',
+  'CIERRE_AUTOMATICO' => 'Cierre automático de fin de día',
   'HACIA_RECOLECCION' => 'Motorista hacia recolección',
   'LLEGADA_RECOLECCION' => 'Llegada a recolección',
   _ => type.replaceAll('_', ' ').toLowerCase(),

@@ -6,6 +6,10 @@ import 'package:vitago_app/features/user_administration/models/managed_user.dart
 abstract final class UserManagementPolicy {
   static bool canManage(UserProfile actor, ManagedUser target) {
     if (!actor.can(AppPermissions.manageUsers)) return false;
+    final targetIsMasterAdmin = target.roles.any(
+      (role) => role.code.toUpperCase() == AppRoles.masterAdmin,
+    );
+    if (targetIsMasterAdmin && !actor.isMasterAdmin) return false;
     if (!_isOperationsManager(actor)) return true;
     return !target.roles.any(
       (role) =>

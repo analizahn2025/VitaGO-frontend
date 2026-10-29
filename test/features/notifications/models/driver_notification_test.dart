@@ -53,6 +53,28 @@ void main() {
     expect(feed.items.single.isImportant, isTrue);
   });
 
+  test('presenta las notificaciones nuevas de contingencia', () {
+    final feed = DriverNotificationFeed.fromJson([
+      {
+        'id': 'pending-id',
+        'tipo': 'REASIGNACION_PENDIENTE',
+        'mensaje': 'Se está buscando un reemplazo.',
+        'leida': false,
+      },
+      {
+        'id': 'failed-id',
+        'tipo': 'SERVICIO_NO_ENTREGADO',
+        'mensaje': 'El servicio cerró al finalizar el día.',
+        'leida': false,
+      },
+    ]);
+
+    expect(feed.items.first.title, 'Pendiente de reasignación');
+    expect(feed.items.first.isImportant, isTrue);
+    expect(feed.items.last.title, 'Servicio no entregado');
+    expect(feed.items.last.isImportant, isTrue);
+  });
+
   test('consulta el conteo y marca una notificación como leída', () async {
     final repository = _FakeNotificationsRepository();
     final container = ProviderContainer(

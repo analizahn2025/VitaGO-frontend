@@ -1,4 +1,5 @@
 import 'package:dio/dio.dart';
+import 'package:vitago_app/core/validation/operational_values.dart';
 import 'package:vitago_app/core/errors/app_failure.dart';
 import 'package:vitago_app/core/models/paginated_result.dart';
 import 'package:vitago_app/core/network/api_client.dart';
@@ -75,6 +76,17 @@ class EvidenceApiService {
     required bool includeType,
   }) async {
     try {
+      if (includeType && input.type == 'FOTO_RECOLECCION') {
+        final error = containerTemperatureError(input.temperatureC);
+        if (error != null) {
+          throw AppFailure(
+            message: error,
+            fieldErrors: {
+              'temperatura_contenedor_c': [error],
+            },
+          );
+        }
+      }
       final form = FormData.fromMap({
         if (includeType) 'tipo': input.type,
         'archivo': await MultipartFile.fromFile(
@@ -83,8 +95,11 @@ class EvidenceApiService {
         ),
         'latitud': input.latitude,
         'longitud': input.longitude,
-        'capturada_en': input.capturedAt.toUtc().toIso8601String(),
         'notas': input.notes,
+        if (includeType &&
+            input.type == 'FOTO_RECOLECCION' &&
+            input.temperatureC != null)
+          'temperatura_contenedor_c': normalizeTemperature(input.temperatureC!),
       });
       final response = await _apiClient.post<Map<String, dynamic>>(
         path,

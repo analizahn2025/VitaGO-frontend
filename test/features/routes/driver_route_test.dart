@@ -8,6 +8,143 @@ import 'package:vitago_app/features/routes/widgets/driver_route_section.dart';
 
 void main() {
   test(
+    'conserva paradas intercaladas aunque reaparezca la misma solicitud',
+    () {
+      final stops = [
+        for (final (index, id, type) in [
+          (1, 'A', 'RECOLECCION'),
+          (2, 'B', 'RECOLECCION'),
+          (3, 'B', 'ENTREGA'),
+          (4, 'A', 'ENTREGA'),
+        ])
+          _stop(index, type, '$id $type')
+            ..['solicitud_id'] = id
+            ..['orden_envio'] = id == 'A' ? 1 : 2,
+      ];
+      final route = DriverRoute.fromJson({
+        ..._routeJson(),
+        'orden_tipo': 'CERCANIA_GPS',
+        'paradas': stops,
+        'proxima_parada': stops.first,
+        'flujo_actual': {
+          'modo': 'AUTOMATICO',
+          'pantalla': 'MAPA',
+          'solicitud_id': 'A',
+          'tipo_parada': 'RECOLECCION',
+          'estado': 'GOING_TO_PICKUP',
+          'tramo_id': 'A:RECOLECCION',
+        },
+      });
+      expect(route.stops.map((stop) => '${stop.requestId}:${stop.type}'), [
+        'A:RECOLECCION',
+        'B:RECOLECCION',
+        'B:ENTREGA',
+        'A:ENTREGA',
+      ]);
+      expect(route.stops.map((stop) => stop.order), [1, 2, 3, 4]);
+      expect(route.flow!.segmentId, 'A:RECOLECCION');
+      expect(route.nextStop!.requestId, 'A');
+    },
+  );
+
+  test(
+    'acepta CERCANIA_GPS y conserva las paradas tal como las envía el backend',
+    () {
+      final json = _routeJson();
+      final first = _stop(9, 'RECOLECCION', 'Servicio recibido primero')
+        ..['solicitud_id'] = 'newer-request';
+      final second = _stop(1, 'RECOLECCION', 'Servicio recibido después')
+        ..['solicitud_id'] = 'older-request';
+      json['orden_tipo'] = 'CERCANIA_GPS';
+      json['paradas'] = [first, second];
+      json['proxima_parada'] = first;
+      final route = DriverRoute.fromJson(json);
+      expect(route.orderType, 'CERCANIA_GPS');
+      expect(route.stops.map((stop) => stop.requestId), [
+        'newer-request',
+        'older-request',
+      ]);
+      expect(route.nextStop!.requestId, 'newer-request');
+      expect(route.roadRoute.estimatedDistanceMeters, isNull);
+      expect(route.roadRoute.estimatedDurationSeconds, isNull);
+      expect(DriverRoute.fromJson(_routeJson()).orderType, 'ASIGNACION');
+    },
+  );
+
+  testWidgets(
+    'la tarjeta muestra la próxima parada recibida sin afirmar orden por antigüedad',
+    (tester) async {
+      final json = _routeJson()..['orden_tipo'] = 'CERCANIA_GPS';
+      json['proxima_parada'] = _stop(2, 'ENTREGA', 'Servicio en curso');
+      json['paradas'] = [
+        json['proxima_parada'],
+        _stop(1, 'RECOLECCION', 'Servicio pendiente'),
+      ];
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            routesRepositoryProvider.overrideWithValue(
+              _RoutesRepository(DriverRoute.fromJson(json)),
+            ),
+          ],
+          child: MaterialApp(
+            home: Scaffold(
+              body: DriverRouteSection(
+                canCalculate: false,
+                onOpenRequest: (_) {},
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Servicio en curso'), findsOneWidget);
+      expect(find.text('2 paradas en el orden de tu ruta'), findsOneWidget);
+      expect(find.textContaining('orden de asignación'), findsNothing);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  test('flujo_actual conserva IDs reales cuando cambia el orden recibido', () {
+    final first = _stop(1, 'RECOLECCION', 'Primero')
+      ..['solicitud_id'] = 'first';
+    final second = _stop(2, 'RECOLECCION', 'Segundo')
+      ..['solicitud_id'] = 'second';
+    final route = DriverRoute.fromJson({
+      ..._routeJson(),
+      'paradas': [second, first],
+      'proxima_parada': second,
+      'flujo_actual': {
+        'modo': 'AUTOMATICO',
+        'pantalla': 'MAPA',
+        'solicitud_id': 'second',
+        'tipo_parada': 'RECOLECCION',
+        'estado': 'GOING_TO_PICKUP',
+        'tramo_id': 'second:RECOLECCION',
+      },
+    });
+    expect(route.stops.first.requestId, 'second');
+    expect(route.flow!.requestId, 'second');
+    expect(route.flow!.segmentId, 'second:RECOLECCION');
+  });
+
+  test('recupera llegada_actual sin navegación externa', () {
+    final route = DriverRoute.fromJson({
+      ..._routeJson(),
+      'llegada_actual': {
+        'evento_id': 'arrival-id',
+        'solicitud_id': 'request-id',
+        'estado': 'AT_DESTINATION',
+        'tipo_parada': 'ENTREGA',
+        'detectada_en': '2026-10-23T18:00:00Z',
+        'fuente': 'GPS',
+        'pantalla': 'ENTREGA',
+      },
+    });
+    expect(route.currentArrival!.targetStatus, 'DELIVERED');
+    expect(DriverRoute.fromJson(_routeJson()).currentArrival, isNull);
+  });
+  test(
     'interpreta el mapa integrado y el estado vial sin navegación externa',
     () {
       final route = DriverRoute.fromJson(_routeJson());
@@ -64,7 +201,7 @@ void main() {
       expect(find.text('Mi ruta'), findsOneWidget);
       expect(find.text('Ver mapa'), findsOneWidget);
       expect(find.text('Navegar'), findsNothing);
-      expect(find.textContaining('beta'), findsOneWidget);
+      expect(find.textContaining('beta'), findsNothing);
       expect(tester.takeException(), isNull);
     },
   );

@@ -28,8 +28,9 @@ class FleetRepositoryImpl implements FleetRepository {
       _apiService.getDrivers(query);
 
   @override
-  Future<PaginatedResult<DriverProfile>> getAvailableDrivers() =>
-      _apiService.getAvailableDrivers();
+  Future<PaginatedResult<DriverProfile>> getAvailableDrivers({
+    int? tubeCount,
+  }) => _apiService.getAvailableDrivers(tubeCount: tubeCount);
 
   @override
   Future<DriverProfile> getDriver(String driverId) =>

@@ -1,5 +1,27 @@
 # Diagnóstico de conexión de VitaGo
 
+## Corporate publicado en Render (2026-10-27)
+
+URL base pública de pruebas: `https://vitago.onrender.com/api/v1/`.
+Configuración móvil: `config/corporate.render.json`, con autenticación LOCAL.
+Desde frontend, detener la ejecución anterior con q y volver a lanzar:
+
+```powershell
+flutter run --flavor corporate -t lib/main_corporate.dart --dart-define-from-file=config/corporate.render.json
+```
+
+El endpoint público `https://vitago.onrender.com/api/v1/salud/` respondió HTTP200
+con estado correcto y servicio VitaGo Corporate en la comprobación del frontend.
+La primera petición agotó25 segundos sin respuesta; la repetición respondió en
+aproximadamente3.5 segundos. Esto no demuestra la causa de la demora ni verifica
+base de datos, credenciales o inicio de sesión. La prueba física desde el móvil
+se realiza abriendo esa URL y después usando la app con una cuenta remota.
+
+No necesita la IP Wi-Fi de la computadora ni adb reverse para acceder a Render.
+Los comandos con IP/HTTP/8001 documentados debajo corresponden al servidor local.
+No usar esta dirección Corporate para Network. Cambiar la URL requiere una nueva
+ejecución de Flutter con los argumentos correctos, no hot reload ni hot restart.
+
 ## 1. Objetivo
 
 Este documento permite diagnosticar errores de conexión entre la aplicación

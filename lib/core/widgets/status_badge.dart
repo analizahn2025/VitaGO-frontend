@@ -2,9 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:vitago_app/app/theme/app_design_tokens.dart';
 
 class StatusBadge extends StatelessWidget {
-  const StatusBadge({required this.status, super.key});
+  const StatusBadge({required this.status, this.label, super.key});
 
   final String status;
+  final String? label;
 
   @override
   Widget build(BuildContext context) {
@@ -71,7 +72,7 @@ class StatusBadge extends StatelessWidget {
           vertical: AppSpacing.xxs,
         ),
         child: Text(
-          _label(normalized),
+          label ?? _label(normalized),
           style: Theme.of(context).textTheme.labelSmall
               ?.copyWith(color: foreground, fontWeight: FontWeight.w700),
         ),
@@ -103,7 +104,7 @@ class StatusBadge extends StatelessWidget {
     'OUT_OF_SERVICE' => 'Fuera de servicio',
     'EMPTY' => 'Vacío',
     'AVAILABLE_SPACE' => 'Con espacio',
-    'FULL' => 'Completo',
+    'FULL' => 'Ocupado',
     'FUERA_SERVICIO' => 'Fuera de servicio',
     _ => value.replaceAll('_', ' ').toLowerCase(),
   };

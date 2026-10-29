@@ -30,6 +30,25 @@ void main() {
     ]);
   });
 
+  test('puede dibujar el resultado fresco sin cerrar y abrir el mapa', () {
+    final staleRoute = DriverRoute.fromJson(_routeJson(showRoute: false));
+    final freshRoadRoute = DriverRoute.fromJson(_routeJson(showRoute: true))
+        .roadRoute;
+
+    expect(
+      routePolylinePoints(
+        staleRoute,
+        roadRoute: freshRoadRoute,
+        showRoute: true,
+      ),
+      const <LatLng>[
+        LatLng(38.5, -120.2),
+        LatLng(40.7, -120.95),
+        LatLng(43.252, -126.453),
+      ],
+    );
+  });
+
   test('descarta coordenadas de parada fuera del rango geográfico', () {
     const location = RouteLocation(
       id: 'location-id',
@@ -41,6 +60,43 @@ void main() {
 
     expect(routeLocationPosition(location), isNull);
   });
+
+  test('nunca usa la línea global si falta el desglose', () {
+    final json = _routeJson(showRoute: true);
+    final road = json['ruta_vial'] as Map<String, dynamic>;
+    road['desglose_disponible'] = false;
+    road['requiere_actualizar_desglose'] = true;
+    road['tramos'] = [];
+    expect(routePolylinePoints(DriverRoute.fromJson(json)), isEmpty);
+  });
+
+  test('conserva los tramos reutilizados al avanzar la versión de paradas', () {
+    final json = _routeJson(showRoute: true);
+    json['version_actual'] = 2;
+    final road = json['ruta_vial'] as Map<String, dynamic>;
+    road['version_actual'] = 2;
+    road['version_calculada'] = 1;
+    expect(routePolylinePoints(DriverRoute.fromJson(json)), hasLength(3));
+  });
+
+  test('no recupera otra línea para un tramo ausente o sin desplazamiento', () {
+    final json = _routeJson(showRoute: true);
+    final route = DriverRoute.fromJson(json);
+    expect(routePolylinePoints(route), isNotEmpty);
+    (json['flujo_actual'] as Map)['tramo_id'] = 'other:ENTREGA';
+    expect(routePolylinePoints(DriverRoute.fromJson(json)), isEmpty);
+    (json['flujo_actual'] as Map)['tramo_id'] = 'request-id:RECOLECCION';
+    final road = json['ruta_vial'] as Map<String, dynamic>;
+    (road['tramos'] as List).first['sin_desplazamiento'] = true;
+    expect(routePolylinePoints(DriverRoute.fromJson(json)), isEmpty);
+  });
+
+  test('una geometría inválida no recupera la polilínea global', () {
+    final json = _routeJson(showRoute: true);
+    final road = json['ruta_vial'] as Map<String, dynamic>;
+    (road['tramos'] as List).first['polilinea_codificada'] = 'invalid';
+    expect(routePolylinePoints(DriverRoute.fromJson(json)), isEmpty);
+  });
 }
 
 Map<String, dynamic> _routeJson({required bool showRoute}) => {
@@ -50,6 +106,16 @@ Map<String, dynamic> _routeJson({required bool showRoute}) => {
   'version_actual': 1,
   'orden_tipo': 'ASIGNACION',
   'ruta_calculada': showRoute,
+  'flujo_actual': {
+    'modo': 'AUTOMATICO',
+    'requiere_aceptacion': false,
+    'permite_elegir_etapa': false,
+    'solicitud_id': 'request-id',
+    'tipo_parada': 'RECOLECCION',
+    'estado': 'GOING_TO_PICKUP',
+    'tramo_id': 'request-id:RECOLECCION',
+    'pantalla': 'MAPA',
+  },
   'proxima_parada': _stop(1, 'RECOLECCION', 'Sucursal Centro'),
   'paradas': [
     _stop(1, 'RECOLECCION', 'Sucursal Centro'),
@@ -79,6 +145,34 @@ Map<String, dynamic> _routeJson({required bool showRoute}) => {
     'metricas_en_respuesta': false,
     'distancia_estimada_metros': null,
     'duracion_estimada_segundos': null,
+    'modo_visualizacion': 'UN_TRAMO',
+    'desglose_disponible': showRoute,
+    'requiere_actualizar_desglose': false,
+    'tramo_actual_id': 'request-id:RECOLECCION',
+    'tramos': [
+      {
+        'tramo_id': 'request-id:RECOLECCION',
+        'solicitud_id': 'request-id',
+        'numero_solicitud': 'SOL-1',
+        'orden_envio': 1,
+        'orden_parada': 1,
+        'tipo_parada': 'RECOLECCION',
+        'estado_solicitud': 'ASSIGNED',
+        'es_proximo': true,
+        'origen': {
+          'tipo': 'GPS',
+          'latitud': '14.072000',
+          'longitud': '-87.192000',
+        },
+        'destino': {
+          'ubicacion_id': 'location-1',
+          'latitud': '14.072300',
+          'longitud': '-87.192100',
+        },
+        'polilinea_codificada': '_p~iF~ps|U_ulLnnqC_mqNvxq`@',
+        'sin_desplazamiento': false,
+      },
+    ],
   },
 };
 

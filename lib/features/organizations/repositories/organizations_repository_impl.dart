@@ -1,6 +1,7 @@
 import 'package:vitago_app/core/models/paginated_result.dart';
 import 'package:vitago_app/features/organizations/models/branch.dart';
 import 'package:vitago_app/features/organizations/models/company.dart';
+import 'package:vitago_app/features/organizations/models/driver_limits.dart';
 import 'package:vitago_app/features/organizations/repositories/organizations_repository.dart';
 import 'package:vitago_app/features/organizations/services/organizations_api_service.dart';
 
@@ -8,6 +9,15 @@ class OrganizationsRepositoryImpl implements OrganizationsRepository {
   const OrganizationsRepositoryImpl(this._apiService);
 
   final OrganizationsApiService _apiService;
+
+  @override
+  Future<DriverLimits> getDriverLimits(String? companyId) =>
+      _apiService.getDriverLimits(companyId);
+  @override
+  Future<DriverLimits> updateDriverLimits(
+    String? companyId,
+    UpdateDriverLimitsInput input,
+  ) => _apiService.updateDriverLimits(companyId, input);
 
   @override
   Future<PaginatedResult<Company>> getCompanies({

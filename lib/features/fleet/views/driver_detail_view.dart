@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:vitago_app/app/config/app_config.dart';
+import 'package:vitago_app/core/permissions/administrative_scope.dart';
+import 'package:vitago_app/features/fleet/views/driver_reports_view.dart';
 import 'package:vitago_app/app/theme/app_design_tokens.dart';
 import 'package:vitago_app/core/formatters/app_date_format.dart';
 import 'package:vitago_app/core/permissions/app_permissions.dart';
@@ -8,6 +11,7 @@ import 'package:vitago_app/core/widgets/status_badge.dart';
 import 'package:vitago_app/features/fleet/controllers/fleet_controller.dart';
 import 'package:vitago_app/features/fleet/models/fleet_models.dart';
 import 'package:vitago_app/features/fleet/views/update_driver_operation_view.dart';
+import 'package:vitago_app/features/fleet/widgets/driver_tube_load.dart';
 import 'package:vitago_app/features/profile/models/user_profile.dart';
 
 class DriverDetailView extends ConsumerWidget {
@@ -36,6 +40,22 @@ class DriverDetailView extends ConsumerWidget {
             driver: value,
             canManage: profile.can(AppPermissions.manageDrivers),
             onUpdate: () => _openUpdate(context, ref, value),
+            onViewReport:
+                canViewDriverReports(
+                  profile,
+                  corporate: ref.watch(appConfigProvider).isCorporate,
+                  companyId: value.companyId,
+                )
+                ? () => Navigator.of(context).push<void>(
+                    MaterialPageRoute(
+                      builder: (_) => DriverReportDetailView(
+                        profile: profile,
+                        driverId: value.id,
+                        companyId: value.companyId,
+                      ),
+                    ),
+                  )
+                : null,
           ),
         ),
       ),
@@ -63,11 +83,13 @@ class _DriverContent extends StatelessWidget {
     required this.driver,
     required this.canManage,
     required this.onUpdate,
+    this.onViewReport,
   });
 
   final DriverProfile driver;
   final bool canManage;
   final VoidCallback onUpdate;
+  final VoidCallback? onViewReport;
 
   @override
   Widget build(BuildContext context) {
@@ -110,6 +132,11 @@ class _DriverContent extends StatelessWidget {
           runSpacing: AppSpacing.sm,
           children: [
             StatusBadge(status: driver.operationalStatus),
+            if (driver.onLunch)
+              const Chip(
+                avatar: Icon(Icons.lunch_dining_outlined, size: 18),
+                label: Text('En almuerzo'),
+              ),
             StatusBadge(status: driver.active ? 'ACTIVO' : 'INACTIVO'),
           ],
         ),
@@ -118,6 +145,19 @@ class _DriverContent extends StatelessWidget {
           label: 'Teléfono',
           value: driver.user.phone ?? 'No registrado',
         ),
+        DriverTubeLoad(driver: driver),
+        if (driver.onLunch && driver.lunchStartedAt != null)
+          _DetailLine(
+            label: 'Almuerzo desde',
+            value: AppDateFormat.dateTime(driver.lunchStartedAt!),
+          ),
+        if (onViewReport != null)
+          TextButton.icon(
+            onPressed: onViewReport,
+            icon: const Icon(Icons.assessment_outlined),
+            label: const Text('Ver reporte diario'),
+          ),
+        const SizedBox(height: AppSpacing.md),
         _DetailLine(
           label: 'Vehículo',
           value: vehicle == null

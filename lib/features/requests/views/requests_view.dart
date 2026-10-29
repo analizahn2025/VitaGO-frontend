@@ -16,19 +16,59 @@ import 'package:vitago_app/features/requests/views/create_request_view.dart';
 import 'package:vitago_app/features/requests/views/widgets/request_route_tile.dart';
 
 class RequestsView extends ConsumerStatefulWidget {
-  const RequestsView({required this.profile, super.key});
+  const RequestsView({required this.profile, this.isActive = true, super.key});
 
   final UserProfile profile;
+  final bool isActive;
 
   @override
   ConsumerState<RequestsView> createState() => _RequestsViewState();
 }
 
-class _RequestsViewState extends ConsumerState<RequestsView> {
+class _RequestsViewState extends ConsumerState<RequestsView>
+    with WidgetsBindingObserver {
   int _page = 1;
   String? _status;
   String? _priority;
   String? _modality;
+
+  RequestQuery get _query => RequestQuery(
+    companyId: widget.profile.company?.id,
+    status: _status,
+    priority: _priority,
+    modality: _modality,
+    page: _page,
+  );
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void didUpdateWidget(covariant RequestsView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.profile.company?.id != widget.profile.company?.id) _page = 1;
+    if (!oldWidget.isActive && widget.isActive) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && widget.isActive) _refreshCurrentPage();
+      });
+    }
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed && widget.isActive) {
+      _refreshCurrentPage();
+    }
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
 
   bool get _canView =>
       widget.profile.can(AppPermissions.viewRequests) ||
@@ -45,12 +85,7 @@ class _RequestsViewState extends ConsumerState<RequestsView> {
       );
     }
 
-    final query = RequestQuery(
-      status: _status,
-      priority: _priority,
-      modality: _modality,
-      page: _page,
-    );
+    final query = _query;
     final requests = ref.watch(requestsControllerProvider(query));
     return requests.when(
       loading: () => const AppLoadingView(label: 'Cargando solicitudes…'),
@@ -144,16 +179,8 @@ class _RequestsViewState extends ConsumerState<RequestsView> {
   }
 
   void _refreshCurrentPage() {
-    ref.invalidate(
-      requestsControllerProvider(
-        RequestQuery(
-          status: _status,
-          priority: _priority,
-          modality: _modality,
-          page: _page,
-        ),
-      ),
-    );
+    if (!mounted || !_canView) return;
+    ref.invalidate(requestsControllerProvider(_query));
   }
 }
 

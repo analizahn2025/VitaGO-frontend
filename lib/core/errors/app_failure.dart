@@ -5,6 +5,7 @@ class AppFailure implements Exception {
     required this.message,
     this.statusCode,
     this.serverCode,
+    this.retryAfterSeconds,
     this.fieldErrors = const {},
   });
 
@@ -13,6 +14,17 @@ class AppFailure implements Exception {
     final data = error.response?.data;
     final serverCode = _readCode(data);
     final fieldErrors = _readFieldErrors(data);
+
+    if (statusCode == 429) {
+      return AppFailure(
+        message:
+            _readDetail(data) ??
+            'Se alcanzó el límite de intentos. Inténtalo más tarde.',
+        statusCode: 429,
+        serverCode: serverCode,
+        retryAfterSeconds: _readRetryAfterSeconds(error.response),
+      );
+    }
 
     if (statusCode != null && statusCode >= 500) {
       return AppFailure(
@@ -32,9 +44,11 @@ class AppFailure implements Exception {
     }
 
     if (statusCode == 403) {
-      return const AppFailure(
+      return AppFailure(
         message: 'No tienes permiso para realizar esta operación.',
         statusCode: 403,
+        fieldErrors: fieldErrors,
+        serverCode: serverCode,
       );
     }
 
@@ -53,6 +67,7 @@ class AppFailure implements Exception {
             'La operación entra en conflicto con el estado actual.',
         statusCode: 409,
         serverCode: serverCode,
+        fieldErrors: fieldErrors,
       );
     }
 
@@ -99,6 +114,7 @@ class AppFailure implements Exception {
   final String message;
   final int? statusCode;
   final String? serverCode;
+  final int? retryAfterSeconds;
   final Map<String, List<String>> fieldErrors;
 
   bool get isUnauthorized => statusCode == 401;
@@ -132,6 +148,29 @@ class AppFailure implements Exception {
       return text.isEmpty ? null : text;
     }
     return null;
+  }
+
+  static int? _readRetryAfterSeconds(Response<dynamic>? response) {
+    final headerValue = response?.headers.value('retry-after');
+    final headerSeconds = _readPositiveInteger(headerValue);
+    if (headerSeconds != null) {
+      return headerSeconds;
+    }
+
+    final data = response?.data;
+    if (data case {'segundos_espera': final Object seconds}) {
+      return _readPositiveInteger(seconds);
+    }
+    return null;
+  }
+
+  static int? _readPositiveInteger(Object? value) {
+    final parsed = switch (value) {
+      int number => number,
+      num number => number.toInt(),
+      _ => int.tryParse(value?.toString().trim() ?? ''),
+    };
+    return parsed != null && parsed > 0 ? parsed : null;
   }
 
   static Map<String, List<String>> _readFieldErrors(Object? data) {

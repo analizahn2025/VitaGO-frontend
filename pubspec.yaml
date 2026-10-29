@@ -42,6 +42,7 @@ dependencies:
   google_maps_flutter: ^2.18.2
   image_picker: ^1.2.3
   path_provider: ^2.1.6
+  timezone: ^0.11.2
   uuid: ^4.6.0
 
 dev_dependencies:

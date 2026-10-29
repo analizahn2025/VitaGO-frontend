@@ -6,6 +6,9 @@ abstract interface class ShiftsRepository {
   Future<DriverShift> startShift(ShiftCoordinatesInput input);
 
   Future<DriverShift?> getActiveShift();
+  Future<ActiveShiftDay> getActiveShiftDay();
+  Future<DriverShift> startLunch(String shiftId);
+  Future<DriverShift> finishLunch(String shiftId);
 
   Future<PaginatedResult<DriverShift>> getShifts(ShiftQuery query);
 

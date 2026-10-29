@@ -8,11 +8,15 @@ class RequestRouteTile extends StatelessWidget {
   const RequestRouteTile({
     required this.request,
     required this.onTap,
+    this.deliveredAt,
+    this.operationalTimeZone,
     super.key,
   });
 
   final ServiceRequestSummary request;
   final VoidCallback onTap;
+  final DateTime? deliveredAt;
+  final String? operationalTimeZone;
 
   @override
   Widget build(BuildContext context) {
@@ -33,16 +37,20 @@ class RequestRouteTile extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Row(
+                  Wrap(
+                    alignment: WrapAlignment.spaceBetween,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    spacing: AppSpacing.sm,
+                    runSpacing: AppSpacing.xs,
                     children: [
-                      Expanded(
-                        child: Text(
-                          request.number,
-                          style: Theme.of(context).textTheme.titleMedium,
-                        ),
+                      Text(
+                        request.number,
+                        style: Theme.of(context).textTheme.titleMedium,
                       ),
-                      const SizedBox(width: AppSpacing.sm),
-                      StatusBadge(status: request.status),
+                      StatusBadge(
+                        status: request.status,
+                        label: request.displayStatusLabel,
+                      ),
                     ],
                   ),
                   if (request.isPriority) ...[
@@ -55,7 +63,18 @@ class RequestRouteTile extends StatelessWidget {
                       ),
                     ),
                   ],
+                  if (request.pendingReassignment) ...[
+                    const SizedBox(height: AppSpacing.xxs),
+                    Text(
+                      'Pendiente de reasignación',
+                      style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                        color: colors.tertiary,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
                   const SizedBox(height: AppSpacing.sm),
+                  Text('Tubos: ${request.tubeCount ?? 'Sin declarar'}'),
                   Text(
                     requestModalityLabel(request.modality),
                     style: Theme.of(context).textTheme.labelMedium?.copyWith(
@@ -77,7 +96,9 @@ class RequestRouteTile extends StatelessWidget {
                   ),
                   const SizedBox(height: AppSpacing.sm),
                   Text(
-                    '${request.serviceType.name} · ${AppDateFormat.dateTime(request.createdAt)}',
+                    deliveredAt == null
+                        ? '${request.serviceType.name} · ${AppDateFormat.dateTime(request.createdAt)}'
+                        : 'Entregada · ${AppDateFormat.dateTime(deliveredAt!, timeZone: operationalTimeZone)}',
                     style: Theme.of(context).textTheme.bodySmall
                         ?.copyWith(color: colors.onSurfaceVariant),
                   ),

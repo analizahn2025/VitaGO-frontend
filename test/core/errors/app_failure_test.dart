@@ -77,6 +77,59 @@ void main() {
     expect(failure.fieldErrors, isEmpty);
   });
 
+  test('lee la espera de un 429 desde Retry-After', () {
+    final failure = AppFailure.fromDio(
+      DioException(
+        requestOptions: RequestOptions(
+          path: 'autenticacion/iniciar-sesion/',
+        ),
+        response: Response<Map<String, dynamic>>(
+          requestOptions: RequestOptions(
+            path: 'autenticacion/iniciar-sesion/',
+          ),
+          statusCode: 429,
+          headers: Headers.fromMap({
+            'retry-after': ['125'],
+          }),
+          data: {
+            'detail': 'Se alcanzó el límite de intentos.',
+            'segundos_espera': 120,
+          },
+        ),
+      ),
+    );
+
+    expect(failure.isRateLimited, isTrue);
+    expect(failure.message, 'Se alcanzó el límite de intentos.');
+    expect(failure.retryAfterSeconds, 125);
+    expect(failure.fieldErrors, isEmpty);
+  });
+
+  test('usa segundos_espera cuando Retry-After no es válido', () {
+    final failure = AppFailure.fromDio(
+      DioException(
+        requestOptions: RequestOptions(
+          path: 'autenticacion/iniciar-sesion/',
+        ),
+        response: Response<Map<String, dynamic>>(
+          requestOptions: RequestOptions(
+            path: 'autenticacion/iniciar-sesion/',
+          ),
+          statusCode: 429,
+          headers: Headers.fromMap({
+            'retry-after': ['valor-inválido'],
+          }),
+          data: {
+            'detail': 'Intenta más tarde.',
+            'segundos_espera': 47,
+          },
+        ),
+      ),
+    );
+
+    expect(failure.retryAfterSeconds, 47);
+  });
+
   test('expone errores simples y anidados junto a su campo', () {
     final failure = AppFailure.fromDio(
       DioException(

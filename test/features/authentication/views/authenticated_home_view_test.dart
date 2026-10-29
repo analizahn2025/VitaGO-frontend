@@ -18,10 +18,15 @@ import 'package:vitago_app/features/profile/controllers/profile_controller.dart'
 import 'package:vitago_app/features/profile/models/user_profile.dart';
 import 'package:vitago_app/features/shifts/controllers/shifts_controller.dart';
 
+import 'package:vitago_app/features/notifications/storage/notification_seen_store.dart';
+
+import '../../../support/notification_seen_memory_store.dart';
+
 void main() {
   testWidgets('el shell delivery hereda la cabecera corporativa', (
     tester,
   ) async {
+    addTearDown(() => tester.pumpWidget(const SizedBox()));
     tester.view.physicalSize = const Size(320, 700);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
@@ -30,6 +35,9 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
+          notificationSeenStoreProvider.overrideWithValue(
+            MemoryNotificationSeenStore(),
+          ),
           appConfigProvider.overrideWithValue(
             AppConfig(
               mode: AppMode.corporate,

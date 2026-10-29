@@ -34,6 +34,13 @@ final availableDriversControllerProvider =
       return ref.watch(fleetRepositoryProvider).getAvailableDrivers();
     });
 
+final availableDriversForRequestControllerProvider = FutureProvider.autoDispose
+    .family<PaginatedResult<DriverProfile>, int>((ref, tubeCount) {
+      return ref
+          .watch(fleetRepositoryProvider)
+          .getAvailableDrivers(tubeCount: tubeCount);
+    });
+
 final driverControllerProvider = FutureProvider.autoDispose
     .family<DriverProfile, String>((ref, driverId) {
       return ref.watch(fleetRepositoryProvider).getDriver(driverId);

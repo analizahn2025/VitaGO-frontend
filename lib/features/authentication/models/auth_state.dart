@@ -13,17 +13,20 @@ class AuthState {
     this.message,
     this.fieldErrors = const {},
     this.isProcessing = false,
+    this.loginRetryAfterSeconds,
   });
 
   const AuthState.unauthenticated({
     String? message,
     Map<String, List<String>> fieldErrors = const {},
     bool isProcessing = false,
+    int? loginRetryAfterSeconds,
   }) : this._(
          status: AuthenticationStatus.unauthenticated,
          message: message,
          fieldErrors: fieldErrors,
          isProcessing: isProcessing,
+         loginRetryAfterSeconds: loginRetryAfterSeconds,
        );
 
   const AuthState.authenticated(
@@ -45,4 +48,7 @@ class AuthState {
   final String? message;
   final Map<String, List<String>> fieldErrors;
   final bool isProcessing;
+  final int? loginRetryAfterSeconds;
+
+  bool get isLoginRateLimited => (loginRetryAfterSeconds ?? 0) > 0;
 }

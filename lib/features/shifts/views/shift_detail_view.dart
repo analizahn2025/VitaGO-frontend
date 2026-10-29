@@ -38,6 +38,13 @@ class ShiftDetailView extends StatelessWidget {
                 label: 'Finalización',
                 value: AppDateFormat.dateTime(value),
               ),
+            if (shift.operationalDate case final date?)
+              _ShiftLine(label: 'Fecha operativa', value: date),
+            if (shift.scheduledCloseAt case final cut?)
+              _ShiftLine(
+                label: 'Cierre programado',
+                value: AppDateFormat.dateTime(cut),
+              ),
             _ShiftLine(
               label: 'Tiempo activo',
               value: AppDateFormat.durationMinutes(shift.activeMinutes),
@@ -75,6 +82,24 @@ class ShiftDetailView extends StatelessWidget {
             if (shift.mileageQuality case final quality?) ...[
               const SizedBox(height: AppSpacing.md),
               _MileageQualityCard(quality: quality),
+            ],
+            if (shift.lunchIntervals.isNotEmpty) ...[
+              const SizedBox(height: AppSpacing.lg),
+              Text('Almuerzos', style: Theme.of(context).textTheme.titleLarge),
+              const SizedBox(height: AppSpacing.sm),
+              for (final interval in shift.lunchIntervals)
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(Icons.lunch_dining_outlined),
+                  title: Text(
+                    'Inicio: ${AppDateFormat.dateTime(interval.startedAt)}',
+                  ),
+                  subtitle: Text(
+                    interval.finishedAt == null
+                        ? 'En curso'
+                        : 'Fin: ${AppDateFormat.dateTime(interval.finishedAt!)}${interval.closureReason.isEmpty ? '' : ' · ${interval.closureReason.replaceAll('_', ' ').toLowerCase()}'}',
+                  ),
+                ),
             ],
           ],
         ),

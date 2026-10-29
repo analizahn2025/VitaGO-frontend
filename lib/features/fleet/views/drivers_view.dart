@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:vitago_app/app/theme/app_design_tokens.dart';
 import 'package:vitago_app/core/models/paginated_result.dart';
+import 'package:vitago_app/core/formatters/app_date_format.dart';
 import 'package:vitago_app/core/permissions/app_permissions.dart';
 import 'package:vitago_app/core/widgets/async_state_view.dart';
 import 'package:vitago_app/core/widgets/entity_list_tile.dart';
@@ -24,6 +25,7 @@ class DriversView extends ConsumerStatefulWidget {
 class _DriversViewState extends ConsumerState<DriversView> {
   int _page = 1;
   String? _operationalStatus;
+  bool? _onLunch;
 
   @override
   Widget build(BuildContext context) {
@@ -32,6 +34,7 @@ class _DriversViewState extends ConsumerState<DriversView> {
           ? null
           : widget.profile.company?.id,
       operationalStatus: _operationalStatus,
+      onLunch: _onLunch,
       page: _page,
     );
     final drivers = ref.watch(driversControllerProvider(query));
@@ -63,9 +66,14 @@ class _DriversViewState extends ConsumerState<DriversView> {
           if (index == 0) {
             return _DriversHeader(
               operationalStatus: _operationalStatus,
+              onLunch: _onLunch,
               canCreate: widget.profile.can(AppPermissions.manageDrivers),
               onStatusChanged: (value) => setState(() {
                 _operationalStatus = value;
+                _page = 1;
+              }),
+              onLunchChanged: (value) => setState(() {
+                _onLunch = value;
                 _page = 1;
               }),
               onCreate: _openCreate,
@@ -96,9 +104,11 @@ class _DriversViewState extends ConsumerState<DriversView> {
             title: driver.user.fullName.isEmpty
                 ? driver.user.email
                 : driver.user.fullName,
-            subtitle: vehicle == null
-                ? 'Sin vehículo asignado · ${driver.user.email}'
-                : '${vehicle.plate} · ${driver.user.email}',
+            subtitle: driver.onLunch
+                ? 'En almuerzo${driver.lunchStartedAt == null ? '' : ' desde ${AppDateFormat.dateTime(driver.lunchStartedAt!)}'}'
+                : vehicle == null
+                ? 'Sin vehículo asignado · Límite ${driver.tubeLimit ?? 'sin información'} tubos'
+                : '${vehicle.plate} · Límite ${driver.tubeLimit ?? 'sin información'} tubos',
             status: driver.operationalStatus,
             onTap: () async {
               await Navigator.of(context).push<void>(
@@ -131,6 +141,7 @@ class _DriversViewState extends ConsumerState<DriversView> {
                 ? null
                 : widget.profile.company?.id,
             operationalStatus: _operationalStatus,
+            onLunch: _onLunch,
             page: _page,
           ),
         ),
@@ -142,14 +153,18 @@ class _DriversViewState extends ConsumerState<DriversView> {
 class _DriversHeader extends StatelessWidget {
   const _DriversHeader({
     required this.operationalStatus,
+    required this.onLunch,
     required this.canCreate,
     required this.onStatusChanged,
+    required this.onLunchChanged,
     required this.onCreate,
   });
 
   final String? operationalStatus;
+  final bool? onLunch;
   final bool canCreate;
   final ValueChanged<String?> onStatusChanged;
+  final ValueChanged<bool?> onLunchChanged;
   final VoidCallback onCreate;
 
   @override
@@ -179,6 +194,26 @@ class _DriversHeader extends StatelessWidget {
               ),
             ],
             onChanged: onStatusChanged,
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          Wrap(
+            spacing: AppSpacing.sm,
+            runSpacing: AppSpacing.xs,
+            children: [
+              FilterChip(
+                label: const Text('En almuerzo'),
+                avatar: const Icon(Icons.lunch_dining_outlined, size: 18),
+                selected: onLunch == true,
+                onSelected: (selected) =>
+                    onLunchChanged(selected ? true : null),
+              ),
+              FilterChip(
+                label: const Text('Sin almuerzo'),
+                selected: onLunch == false,
+                onSelected: (selected) =>
+                    onLunchChanged(selected ? false : null),
+              ),
+            ],
           ),
           if (canCreate) ...[
             const SizedBox(height: AppSpacing.md),

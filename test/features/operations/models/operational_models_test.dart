@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:vitago_app/features/evidence/models/operational_evidence.dart';
 import 'package:vitago_app/features/incidents/models/incident.dart';
 import 'package:vitago_app/features/shifts/models/driver_shift.dart';
+import 'package:vitago_app/features/tracking/models/tracking_configuration.dart';
 import 'package:vitago_app/features/tracking/models/tracking_point.dart';
 
 void main() {
@@ -63,6 +64,25 @@ void main() {
   });
 
   group('seguimiento GPS', () {
+    test('interpreta la referencia horaria oficial del servidor', () {
+      final configuration = TrackingConfiguration.fromJson({
+        'hora_servidor': '2026-10-20T18:00:00+00:00',
+        'zona_horaria_operativa': 'America/Tegucigalpa',
+        'intervalo_captura_movimiento_segundos': 5,
+        'intervalo_captura_detenido_segundos': 30,
+        'intervalo_envio_segundos': 20,
+        'tamano_maximo_lote': 200,
+        'antiguedad_maxima_asignacion_segundos': 120,
+        'precision_maxima_asignacion_metros': 50.0,
+        'asignacion_requiere_gps_vigente': true,
+        'intervalo_maximo_medicion_segundos': 30,
+        'cobertura_minima_porcentaje': 90.0,
+      });
+
+      expect(configuration.serverTime, DateTime.utc(2026, 10, 20, 18));
+      expect(configuration.operationalTimeZone, 'America/Tegucigalpa');
+    });
+
     test('envia el identificador idempotente sin calcular es_operativo', () {
       final point = TrackingPointInput(
         clientId: 'client-id',
@@ -160,7 +180,6 @@ void main() {
         description: '  Calle cerrada.  ',
         latitude: '14.072300',
         longitude: '-87.192100',
-        reportedAt: DateTime.parse('2026-09-26T16:10:00Z'),
       ).toJson();
       const review = ReviewIncidentInput(
         status: 'CERRADA',
@@ -169,7 +188,7 @@ void main() {
 
       expect(report['solicitud_id'], isNull);
       expect(report['descripcion'], 'Calle cerrada.');
-      expect(report['reportada_en'], '2026-09-26T16:10:00.000Z');
+      expect(report.containsKey('reportada_en'), isFalse);
       expect(review.toJson(), {'estado': 'CERRADA', 'notas': 'Resuelta.'});
     });
   });

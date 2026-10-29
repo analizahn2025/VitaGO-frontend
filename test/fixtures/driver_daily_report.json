@@ -1,0 +1,86 @@
+{
+  "conteo": 1,
+  "pagina_siguiente": null,
+  "pagina_anterior": null,
+  "resultados": [
+    {
+      "repartidor": {
+        "id": "11111111-1111-4111-8111-111111111111",
+        "nombres": "Motorista",
+        "apellidos": "De prueba",
+        "activo": true,
+        "empresa_id": "395be863-81e1-4196-a668-b698af836653",
+        "empresa_nombre": "Analiza"
+      },
+      "fecha_operativa": "2026-10-27",
+      "zona_horaria_operativa": "America/Tegucigalpa",
+      "periodo": {
+        "desde": "2026-10-27T00:00:00-06:00",
+        "hasta_exclusivo": "2026-10-28T00:00:00-06:00"
+      },
+      "generado_en": "2026-10-27T18:00:00Z",
+      "solicitudes": {
+        "asignadas": 2,
+        "recolectadas": 2,
+        "entregadas": 2,
+        "fallidas": 0,
+        "canceladas": 0
+      },
+      "tubos": {
+        "recogidos_conocidos": 6,
+        "entregados_conocidos": 6,
+        "recolecciones_sin_cantidad": 0,
+        "entregas_sin_cantidad": 0
+      },
+      "kilometraje": {
+        "criterio": "CIERRE_JORNADA",
+        "jornadas_cerradas": 1,
+        "jornadas_con_medicion": 1,
+        "jornadas_consolidadas": 1,
+        "jornadas_sin_cierre_en_periodo": 0,
+        "kilometros_medidos": "12.345",
+        "kilometros_consolidados": "12.345",
+        "completo": true
+      },
+      "temperaturas": {
+        "lecturas_registradas": 2,
+        "lecturas_con_temperatura": 2,
+        "lecturas_sin_temperatura": 0,
+        "minima_c": "3.50",
+        "maxima_c": "4.50",
+        "promedio_c": "4.00",
+        "ultimas_lecturas": [
+          {
+            "id": "22222222-2222-4222-8222-222222222222",
+            "solicitud_id": "33333333-3333-4333-8333-333333333333",
+            "numero_solicitud": "SOL-PRUEBA-2",
+            "temperatura_contenedor_c": "3.50",
+            "fuente_temperatura": "MANUAL",
+            "capturada_en": "2026-10-27T16:00:00Z"
+          },
+          {
+            "id": "44444444-4444-4444-8444-444444444444",
+            "solicitud_id": "55555555-5555-4555-8555-555555555555",
+            "numero_solicitud": "SOL-PRUEBA-1",
+            "temperatura_contenedor_c": "4.50",
+            "fuente_temperatura": "MANUAL",
+            "capturada_en": "2026-10-27T14:00:00Z"
+          }
+        ]
+      },
+      "carga_actual": {
+        "tubos_comprometidos": 0,
+        "tubos_en_transporte": 0,
+        "solicitudes_sin_cantidad_tubos": 0,
+        "solicitudes_activas": 0,
+        "limite_tubos": 20,
+        "limite_solicitudes": 5,
+        "tubos_reservados": 0,
+        "tubos_disponibles": 20,
+        "capacidad": "EMPTY",
+        "estado_operativo": "OFFLINE",
+        "puede_recibir_solicitudes": false
+      }
+    }
+  ]
+}

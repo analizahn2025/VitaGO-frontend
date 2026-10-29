@@ -37,6 +37,9 @@ void main() {
     'destino_especial': null,
     'presentacion_ruta': 'MAPA',
     'kilometros_envio_especial': null,
+    'reasignacion_pendiente': false,
+    'cerrada_en': null,
+    'motivo_cierre': '',
     'estado': 'ASSIGNED',
     'creado_en': '2026-09-28T08:00:00-06:00',
   };
@@ -54,6 +57,7 @@ void main() {
     expect(request.isTerminal, isFalse);
     expect(request.status, 'ASSIGNED');
     expect(request.assignedDriverId, 'driver-id');
+    expect(request.pendingReassignment, isFalse);
   });
 
   test('interpreta detalle, artículos, eventos y asignaciones', () {
@@ -116,6 +120,7 @@ void main() {
 
   test('serializa la creación sin inventar envoltorios', () {
     const input = CreateServiceRequestInput(
+      tubeCount: 3,
       companyId: 'company-id',
       branchId: null,
       priority: 'NORMAL',
@@ -134,6 +139,7 @@ void main() {
     );
 
     expect(input.toJson(), {
+      'cantidad_tubos': 3,
       'empresa_id': 'company-id',
       'sucursal_id': null,
       'prioridad': 'NORMAL',
@@ -210,8 +216,95 @@ void main() {
     expect(request.specialKilometers, '12.45');
   });
 
+  test('interpreta contingencia, cierre diario y varios tramos especiales', () {
+    final json = requestJson()
+      ..addAll({
+        'modalidad': 'ESPECIAL',
+        'repartidor_asignado_id': null,
+        'reasignacion_pendiente': true,
+        'estado': 'DELIVERY_FAILED',
+        'cerrada_en': '2026-10-17T06:00:00Z',
+        'motivo_cierre': 'FIN_DIA',
+        'articulos': const [],
+        'eventos': const [],
+        'asignaciones': const [],
+        'movimiento_especial': {
+          'id': 'movement-2',
+          'repartidor_id': 'driver-2',
+          'jornada_id': 'shift-2',
+          'estado': 'FINALIZADO',
+          'iniciada_en': '2026-10-16T20:00:00Z',
+          'finalizada_en': '2026-10-17T06:00:00Z',
+          'latitud_inicio': '14.10',
+          'longitud_inicio': '-87.20',
+          'latitud_fin': null,
+          'longitud_fin': null,
+          'kilometros_recorridos': '4.500',
+          'registros_considerados': 20,
+          'registros_descartados': 1,
+          'calidad_kilometraje': null,
+          'motivo_cierre': 'FIN_DIA',
+        },
+        'movimientos_especiales': [
+          {
+            'id': 'movement-2',
+            'repartidor_id': 'driver-2',
+            'jornada_id': 'shift-2',
+            'estado': 'FINALIZADO',
+            'iniciada_en': '2026-10-16T20:00:00Z',
+            'finalizada_en': '2026-10-17T06:00:00Z',
+            'latitud_inicio': '14.10',
+            'longitud_inicio': '-87.20',
+            'latitud_fin': null,
+            'longitud_fin': null,
+            'kilometros_recorridos': '4.500',
+            'registros_considerados': 20,
+            'registros_descartados': 1,
+            'calidad_kilometraje': null,
+            'motivo_cierre': 'FIN_DIA',
+          },
+          {
+            'id': 'movement-1',
+            'repartidor_id': 'driver-1',
+            'jornada_id': 'shift-1',
+            'estado': 'FINALIZADO',
+            'iniciada_en': '2026-10-16T15:00:00Z',
+            'finalizada_en': '2026-10-16T18:00:00Z',
+            'latitud_inicio': '14.09',
+            'longitud_inicio': '-87.19',
+            'latitud_fin': null,
+            'longitud_fin': null,
+            'kilometros_recorridos': '3.000',
+            'registros_considerados': 15,
+            'registros_descartados': 0,
+            'calidad_kilometraje': null,
+            'motivo_cierre': 'SUSPENSION',
+          },
+        ],
+        'actualizado_en': '2026-10-17T06:00:00Z',
+      });
+
+    final request = ServiceRequestDetail.fromJson(json);
+
+    expect(request.summary.pendingReassignment, isTrue);
+    expect(request.summary.assignedDriverId, isNull);
+    expect(request.summary.displayStatusLabel, 'No entregado');
+    expect(request.specialMovements, hasLength(2));
+    expect(request.specialMovements.last.closureReason, 'SUSPENSION');
+  });
+
+  test('serializa movimiento opcional al confirmar GPS especial', () {
+    const input = GpsSynchronizationInput([], movementId: 'movement-id');
+
+    expect(input.toJson(), {
+      'movimiento_id': 'movement-id',
+      'sesiones_gps': const [],
+    });
+  });
+
   test('serializa un envío especial con destino libre', () {
     const input = CreateServiceRequestInput(
+      tubeCount: 2,
       companyId: 'company-id',
       branchId: 'branch-id',
       priority: 'NORMAL',

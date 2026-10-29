@@ -3,6 +3,9 @@ abstract final class AppPermissions {
   static const manageUsers = 'usuario.administrar';
   static const assignRoles = 'rol.asignar';
   static const viewCompanies = 'empresa.ver';
+  static const manageCompanies = 'empresa.administrar';
+  static const manageConfiguration = 'configuracion.administrar';
+  static const viewReports = 'reporte.ver';
   static const viewBranches = 'sucursal.ver';
   static const manageBranches = 'sucursal.administrar';
   static const viewLocations = 'ubicacion.ver';

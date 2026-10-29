@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:vitago_app/app/theme/app_design_tokens.dart';
-import 'package:vitago_app/core/errors/app_failure.dart';
+import 'package:vitago_app/features/profile/models/user_profile.dart';
 import 'package:vitago_app/features/routes/models/driver_route.dart';
 import 'package:vitago_app/features/routes/providers/routes_providers.dart';
 import 'package:vitago_app/features/routes/views/driver_route_map_view.dart';
@@ -10,21 +10,19 @@ class DriverRouteSection extends ConsumerStatefulWidget {
   const DriverRouteSection({
     required this.canCalculate,
     required this.onOpenRequest,
+    this.profile,
     super.key,
   });
 
   final bool canCalculate;
   final ValueChanged<String> onOpenRequest;
+  final UserProfile? profile;
 
   @override
   ConsumerState<DriverRouteSection> createState() => _DriverRouteSectionState();
 }
 
 class _DriverRouteSectionState extends ConsumerState<DriverRouteSection> {
-  bool _calculating = false;
-  String? _actionError;
-  RoadRoute? _freshCalculation;
-
   @override
   Widget build(BuildContext context) {
     final routeState = ref.watch(myRouteProvider);
@@ -38,7 +36,7 @@ class _DriverRouteSectionState extends ConsumerState<DriverRouteSection> {
 
   Widget _buildRoute(DriverRoute route) {
     final colors = Theme.of(context).colorScheme;
-    final road = _freshCalculation ?? route.roadRoute;
+    final road = route.roadRoute;
     final next = route.nextStop;
     final nextAddress = next?.location?.address;
     return Semantics(
@@ -78,7 +76,7 @@ class _DriverRouteSectionState extends ConsumerState<DriverRouteSection> {
                         Text(
                           route.stops.isEmpty
                               ? 'No tienes paradas pendientes.'
-                              : '${route.stops.length} parada${route.stops.length == 1 ? '' : 's'} en orden de asignación',
+                              : '${route.stops.length} parada${route.stops.length == 1 ? '' : 's'} en el orden de tu ruta',
                           style: Theme.of(context).textTheme.bodySmall,
                         ),
                       ],
@@ -143,53 +141,6 @@ class _DriverRouteSectionState extends ConsumerState<DriverRouteSection> {
                     ),
                   ),
               ],
-              if (road.motorcycleWarning case final warning?
-                  when route.map.showMap && warning.isNotEmpty) ...[
-                const SizedBox(height: AppSpacing.md),
-                _InfoNote(icon: Icons.two_wheeler_outlined, text: warning),
-              ],
-              if (road.attribution case final attribution?
-                  when route.map.showMap && attribution.isNotEmpty) ...[
-                const SizedBox(height: AppSpacing.xs),
-                Text(
-                  attribution,
-                  textAlign: TextAlign.end,
-                  style: Theme.of(context).textTheme.labelSmall,
-                ),
-              ],
-              if (road.metricsInResponse &&
-                  road.estimatedDistanceMeters != null &&
-                  road.estimatedDurationSeconds != null) ...[
-                const SizedBox(height: AppSpacing.md),
-                _EphemeralEstimate(road: road),
-              ],
-              if (widget.canCalculate &&
-                  route.currentVersion != null &&
-                  (road.canCalculate || road.canRetry)) ...[
-                const SizedBox(height: AppSpacing.md),
-                OutlinedButton.icon(
-                  onPressed: _calculating
-                      ? null
-                      : () => _confirmCalculation(route, road.canRetry),
-                  icon: _calculating
-                      ? const SizedBox.square(
-                          dimension: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Icon(Icons.map_outlined),
-                  label: Text(
-                    road.canRetry ? 'Reintentar cálculo' : 'Calcular ruta vial',
-                  ),
-                ),
-              ],
-              if (_actionError case final message?) ...[
-                const SizedBox(height: AppSpacing.sm),
-                Text(
-                  message,
-                  style: TextStyle(color: colors.error),
-                  semanticsLabel: 'Error: $message',
-                ),
-              ],
             ],
           ),
         ),
@@ -200,59 +151,15 @@ class _DriverRouteSectionState extends ConsumerState<DriverRouteSection> {
   Future<void> _openMap(DriverRoute route, RoadRoute roadRoute) async {
     await Navigator.of(context).push<void>(
       MaterialPageRoute<void>(
-        builder: (context) =>
-            DriverRouteMapView(route: route, roadRoute: roadRoute),
-      ),
-    );
-  }
-
-  Future<void> _confirmCalculation(DriverRoute route, bool retry) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        icon: const Icon(Icons.route_outlined),
-        title: Text(retry ? 'Reintentar cálculo' : 'Calcular ruta vial'),
-        content: const Text(
-          'Se calculará una estimación para el itinerario actual. No cambia el orden ni el estado de tus solicitudes.',
+        settings: const RouteSettings(name: 'driver-route-map'),
+        builder: (context) => DriverRouteMapView(
+          route: route,
+          roadRoute: roadRoute,
+          canCalculate: widget.canCalculate,
+          profile: widget.profile,
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Ahora no'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('Calcular'),
-          ),
-        ],
       ),
     );
-    if (confirmed != true || !mounted) return;
-    setState(() {
-      _calculating = true;
-      _actionError = null;
-    });
-    try {
-      final result = await ref
-          .read(calculateRouteProvider)
-          .calculate(
-            CalculateRouteInput(
-              currentVersion: route.currentVersion!,
-              retry: retry,
-            ),
-          );
-      if (mounted) setState(() => _freshCalculation = result);
-    } on AppFailure catch (failure) {
-      if (failure.serverCode == 'VERSION_DESACTUALIZADA' ||
-          failure.serverCode == 'ITINERARIO_CAMBIO' ||
-          failure.serverCode == 'CALCULO_EN_CURSO' ||
-          failure.serverCode == 'INTENTO_REEMPLAZADO') {
-        ref.invalidate(myRouteProvider);
-      }
-      if (mounted) setState(() => _actionError = failure.message);
-    } finally {
-      if (mounted) setState(() => _calculating = false);
-    }
   }
 }
 
@@ -280,10 +187,19 @@ class _CompactStop extends StatelessWidget {
           ),
           const SizedBox(width: AppSpacing.sm),
           Expanded(
-            child: Text(
-              '${stop.actionLabel} · ${stop.title}',
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '${stop.actionLabel} · ${stop.title}',
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                Text(
+                  'Tubos: ${stop.tubeCount ?? 'Sin declarar'}',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              ],
             ),
           ),
         ],
@@ -325,52 +241,6 @@ class _RouteStatusPill extends StatelessWidget {
         style: Theme.of(context).textTheme.labelSmall
             ?.copyWith(color: color, fontWeight: FontWeight.w700),
       ),
-    );
-  }
-}
-
-class _InfoNote extends StatelessWidget {
-  const _InfoNote({required this.icon, required this.text});
-
-  final IconData icon;
-  final String text;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-    return Container(
-      padding: const EdgeInsets.all(AppSpacing.sm),
-      decoration: BoxDecoration(
-        color: colors.tertiaryContainer.withValues(alpha: 0.45),
-        borderRadius: BorderRadius.circular(AppRadii.control),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(icon, size: 20, color: colors.onTertiaryContainer),
-          const SizedBox(width: AppSpacing.sm),
-          Expanded(
-            child: Text(text, style: Theme.of(context).textTheme.bodySmall),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _EphemeralEstimate extends StatelessWidget {
-  const _EphemeralEstimate({required this.road});
-
-  final RoadRoute road;
-
-  @override
-  Widget build(BuildContext context) {
-    final kilometers = road.estimatedDistanceMeters! / 1000;
-    final minutes = (road.estimatedDurationSeconds! / 60).round();
-    return _InfoNote(
-      icon: Icons.info_outline,
-      text:
-          'Estimación del recorrido completo: ${kilometers.toStringAsFixed(1)} km · $minutes min. No es una llegada en vivo.',
     );
   }
 }

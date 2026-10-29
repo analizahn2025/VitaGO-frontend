@@ -2,6 +2,19 @@
 
 ## 0. Identidad del producto
 
+### Jornada diaria y almuerzo (contrato 0.42.0)
+
+- Jornada activa usa `GET jornadas/activa/` con hora oficial del servidor,
+  `puede_iniciar_jornada`, `cierre_pendiente` y `puede_operar`. Desde las 22:00
+  se bloquean las acciones visibles y la jornada de hoy no se puede reiniciar.
+- Motorista inicia y finaliza almuerzo mediante dos POST `{}` bajo su jornada.
+  Después se actualizan jornada, perfil, solicitudes y ruta. La pausa genérica
+  `PAUSED` se distingue por `en_almuerzo`.
+- Administración filtra motoristas con `en_almuerzo=true` y ve la hora de inicio.
+  El detalle de jornada conserva los intervalos de almuerzo.
+- Render todavía requiere despliegue backend 0.42.0, migración `jornadas.0004`
+  y tarea de cierre periódico; la app tolera respuestas 0.41.0.
+
 - Nombre del producto: **VitaGo**.
 - App interna: **VitaGo Corporate**.
 - App externa: **VitaGo Network**.
@@ -55,6 +68,14 @@ Características:
 
 ## 3. Configuración por build
 
+Conexión pública Corporate de pruebas: https://vitago.onrender.com/api/v1/.
+Se ejecuta con --dart-define-from-file=config/corporate.render.json, flavor
+corporate y lib/main_corporate.dart. AUTH_PROVIDER=LOCAL, según el entorno de
+pruebas publicado por backend. No se copian secretos de Render/PostgreSQL al
+cliente. Cambiar de servidor requiere detener y ejecutar Flutter con los nuevos
+argumentos; no se actualiza la URL mediante hot reload/restart. El endpoint
+salud solo verifica el proceso HTTP, no usuarios/tablas de la base remota.
+
 Ejemplo conceptual:
 
 ```env
@@ -90,6 +111,95 @@ No esperar respuesta remota para saber si es Corporate o External.
 - Tracking en tiempo real
 - Historial
 
+#### Cupos compartidos y reportes (contratos 0.40.0/0.41.0)
+
+- Corporate: Empresas → empresa → Cupos de motoristas. GET requiere empresa.ver;
+  editar exige empresa.administrar y alcance completo de esa empresa/global.
+- Network: Inicio → Cupos de Network para configuracion.administrar global.
+  Se configura una sola red, no cada cliente. Consulta de empresa puede devolver
+  alcance RED y es de solo lectura. El servidor conserva la validación final.
+- Cupos compartidos aplicados individualmente: tubos positivos hasta2147483647,
+  solicitudes1–5 y motivo opcional de hasta1000 caracteres. Se envían solo campos
+  modificados, se conservan errores400/403/409 y no se fabrican valores iniciales.
+  Guardar refresca empresa, perfiles, catálogos, disponibles, solicitudes y ruta.
+- Se retiraron UpdateDriverTubeLimitView y todos los métodos PATCH por motorista;
+  DriverProfile y DriverTubeLoad conservan los valores efectivos como lectura.
+- Flota y motoristas → Reportes de motoristas; también desde el detalle de un
+  motorista. Requiere repartidor.ver, reporte.ver, solicitud.ver, jornada.ver y
+  evidencia.ver con alcance suficiente; una sucursal no habilita un perfil completo.
+  Network global no se expone a administradores de empresas clientes.
+- Reportes lista/detalle/temperaturas usan sus tres GET dedicados. Sin fecha se
+  consulta el día del servidor; abrir detalle/lecturas fija fecha y zona recibidas.
+  Se respetan inactivos, páginas, null y ceros. No se agrega filtro por creador.
+- Actividad del día y carga actual son secciones distintas. Los hitos no se suman
+  como solicitudes únicas; cantidades desconocidas se identifican como parciales.
+  Km de jornadas cerradas no suman km por envío ni representan necesariamente
+  el movimiento GPS de ese día. Se diferencian medición, consolidación y pendientes.
+- Temperaturas muestran fuente, faltantes y cero grados; no generan diagnósticos
+  ni alarmas clínicas. No se consultan GPS/Google para estos reportes.
+- Render sigue en https://vitago.onrender.com/api/v1/ con config/corporate.render.json.
+  Según el contrato, backend debe publicar0.41.0 y aplicar
+  organizaciones.0003_limites_motoristas_compartidos en vitago_corporativo externa.
+  El frontend no aplica migraciones, cambia bases ni copia secretos de Render.
+- Verificación0.41.0:310 pruebas frontend aprobadas y análisis estático sin errores.
+  Reportes/cupos probados con API simulada, pantallas pequeñas/paisaje y texto
+  ampliado; no se verificó el despliegue remoto autenticado. Usar hot restart R.
+
+#### Tubos y temperatura (contrato 0.39.0, cupos actualizados por0.41.0)
+
+- Nueva solicitud requiere Cantidad de tubos, entero positivo hasta2147483647.
+  No se calcula a partir de artículos. Detalle/listado/paradas muestran Sin declarar
+  cuando cantidad_tubos es null. Network conserva bloqueada su creación pública.
+- DriverProfile conserva límite, comprometidos, transportados, reservados,
+  disponibles y solicitudes con cantidad desconocida. Los perfiles antiguos no
+  reciben un límite/carga inventados. DriverTubeLoad muestra datos parciales cuando
+  hay cantidades desconocidas y no ofrece controles de capacidad al motorista.
+- Los límites efectivos del motorista son de solo lectura; se configuran por
+  empresa/red según0.41.0. Corrección/regularización: detalle de solicitud → Declarar/Corregir cantidad de
+  tubos (solicitud.asignar), con motivo obligatorio y validación final del backend.
+- La asignación consulta disponibles con cantidad_tubos del envío. No limita
+  candidatos Network por empresa cliente ni deriva cupo localmente. Un409 conserva
+  el mensaje por repartidor_id, actualiza candidatos y retira selecciones inválidas.
+- La foto operativa de recolección solicita Temperatura del contenedor (°C),
+  admite hasta dos decimales y normaliza coma a punto. Se envía junto a foto/GPS
+  en el mismo multipart; nunca fuente_temperatura. Cada formulario tiene su propia
+  lectura, sin valores por defecto ni rangos/alertas clínicas inventados.
+- Entrega/incidencia no envían temperatura. Evidencias históricas null muestran
+  Sin registrar. Un400 de temperatura conserva imagen/lectura y permite corregir;
+  las respuestas ambiguas siguen verificándose antes de reenviar. El201 continúa
+  siguiendo flujo_actual sin imponer IN_TRANSIT ni enviar otra transición.
+
+#### Listado administrativo y resumen diario
+
+- Solicitudes usa GET solicitudes/ con empresa_id del perfil cuando existe;
+  interpreta resultados, conteo y enlaces de paginación. No filtra por creador
+  ni añade la sucursal del perfil al listado administrativo. El backend aplica
+  los permisos y el alcance efectivo; sin empresa no se inventa un filtro.
+- El listado se refresca al regresar a su pestaña, reanudar la app, volver del
+  detalle o crear una solicitud; conserva empresa, filtros y página vigente.
+- Inicio utiliza resumen-solicitante/ para Resumen de envíos: Pendientes usa
+  pendientes, En progreso usa activas y Entregadas hoy usa entregadas_del_dia.
+  Los dos primeros reflejan la carga visible en esos estados, sin filtro diario;
+  solo el tercero corresponde al día operativo del servidor. Los cinco recientes
+  y entregas_recientes_del_dia no sustituyen el listado completo.
+- El resumen no añade sucursal_id cuando el perfil tiene alcance de empresa o
+  global (incluido superadministrador); la sucursal asociada no debe reducir ese
+  alcance. La API sigue aplicando permisos. En depuración, resumen-inicio registra
+  URL, estado, total, entregadas_del_dia, fecha operativa y cantidad de entregas
+  recientes, sin cuerpos, tokens ni credenciales. Un total acumulado positivo
+  puede coexistir con cero entregas del día.
+
+#### Cobertura y flotas (contrato 0.37.0)
+
+- Corporate ENTRE_SUCURSALES admite ciudades y municipios diferentes de la misma
+  empresa, país y departamento. No se añade un límite local de distancia.
+- La API decide los destinos autorizados: se consultan al cambiar el origen y se
+  muestran completos, conservando sus mensajes de disponibilidad y errores por campo.
+- Corporate selecciona motoristas de la empresa de la solicitud; Network utiliza
+  los candidatos globales del backend sin filtrar por empresa cliente. El máximo
+  de cinco servicios es total y lo controla el backend.
+- La creación pública Network sigue bloqueada hasta disponer de cotización/tarifa.
+
 ### Rider
 
 - Inicio
@@ -104,6 +214,133 @@ No esperar respuesta remota para saber si es Corporate o External.
 - Jornada
 - Resumen al finalizar jornada
 - Mi vehículo si aplica
+
+#### Flujo automático del motorista (contratos 0.36.0/0.38.0)
+
+- El backend elige servicio/etapa con mi-ruta.flujo_actual. No hay aceptar,
+  iniciar, confirmar después de la foto ni selectores operativos.
+- DriverArrivalListener recupera el flujo al iniciar/reanudar, recibir llegadas,
+  avisos nuevos o GPS que recupera activación pendiente. Presenta mapa/foto o
+  finalización especial solo en primer plano y sobre una pantalla segura.
+- DriverRequestActions se comparte entre mapa/detalle, con permisos de evidencia
+  y transición, jornada y GPS. No habilita operaciones para otro servicio.
+- Enviar FOTO_RECOLECCION puede confirmar PICKED_UP o IN_TRANSIT según la siguiente
+  parada elegida por el backend; ambos significan recolección completada.
+  FOTO_ENTREGA confirma DELIVERED.
+  Un 201 no genera otro POST de transición. Se consulta detalle y mi-ruta,
+  actualizando el mapa o volviendo a principal/espera cuando no hay servicios.
+- Una respuesta perdida obliga a consultar detalle/ruta/evidencias antes de
+  permitir otro envío manual. Si la foto ya avanzó, solo se refresca información.
+  El fallo de refresco posterior tampoco vuelve a enviar foto ni transición.
+- El especial conserva Finalizar encargo a AT_DESTINATION y luego FOTO_ENTREGA.
+  Captura/envía GPS previamente y guarda el manifiesto con UUID de movimiento,
+  sesiones y secuencias en almacenamiento seguro por API/motorista. Si se corta
+  la conexión, confirma medición al recuperar/cerrar; no borra la cola GPS ni
+  reenvía fotografías en segundo plano.
+- Incidencias y fallos autorizados siguen disponibles. Las fotos de incidencia
+  no confirman etapas ni permiten eludir la próxima parada.
+- Nuevos modelos requieren R mayúscula/reinicio completo, no solo hot reload.
+
+#### Orden del backend (contratos 0.35.0/0.38.0)
+
+- Se aceptan CERCANIA_GPS y ASIGNACION sin ordenar paradas localmente. El flujo
+  y proxima_parada del servidor deciden la acción vigente.
+- Desde 0.38.0 la unidad es la parada: puede recoger A, recoger B, entregar B y
+  entregar A. Un UUID puede reaparecer: no agrupar etapas ni deduplicar por envío.
+  PICKED_UP no obliga a ir inmediatamente a su entrega ni libera cupo.
+  El tramo se identifica por solicitud/tipo, no por índice u orden_envio.
+- La tarjeta dice «en el orden de tu ruta»: no promete cercanía efectiva si
+  se usó respaldo sin GPS ni confunde estrategia con ETA o kilometraje.
+- Se conservan UUID, no índices o etiquetas de un cálculo anterior. No se
+  calculan distancias en Flutter ni se cambia la planificación del backend.
+
+#### Geometrías por tramo (contratos 0.34.0/0.36.0)
+
+- RoadRoute conserva el desglose y las geometrías temporales restantes, pero
+  el mapa solo dibuja flujo_actual.tramo_id; se retiró RouteShipmentSelector.
+- Sin geometría compatible o sin desplazamiento se conserva el punto, no una
+  línea global/vieja ni rectas inventadas. Origen previsto nunca sustituye GPS.
+- La caché anterior sin desglose mantiene actualización manual con confirmación
+  y reintentar=true; no hay cálculos por movimiento, etapa o cámara.
+- Se conserva atribución y el aviso del servidor bajo Información del mapa.
+  Sin mapa para un especial, solo se muestra información/kilometraje.
+
+#### Llegada automática (contrato 0.32.0)
+
+- Marcador personalizado (2026-10-28): el mapa utiliza la gotita en moto original
+  de `assets/branding/corporate/app_icon.png` en una insignia circular de 56 dp.
+  El contorno y la flecha usan el color primario configurable de cada producto.
+  El logo permanece derecho; una flecha independiente indica el rumbo GPS válido
+  y se oculta al detenerse (velocidad inferior a 0.5 m/s) o sin rumbo disponible.
+  Los PNG se generan y reutilizan según paleta y densidad, no en cada posición.
+  No cambia el contrato HTTP ni el seguimiento; no añade voz ni recálculos.
+  Revisión de condiciones Google realizada para este cambio visual: se conserva
+  la atribución del mapa, no se cachean datos Google ni se copian fragmentos de
+  sus ejemplos. Falta verificar el aspecto y movimiento en un teléfono físico.
+  Verificación del mapa (2026-10-28): 321 pruebas automatizadas aprobadas y
+  análisis Dart sin incidencias, incluyendo cámara y recorte visual del trazado.
+- El marcador del motorista consume cada posición del mismo stream GPS de la
+  jornada, antes del filtro de cadencia y sin esperar confirmación del backend.
+  El stream arranca antes de reenviar la cola y de la lectura inicial puntual;
+  una lectura inicial tardía no reemplaza una posición ya recibida en vivo.
+- La cámara se centra en el GPS más reciente al abrir y sigue al motorista.
+  Arrastrar o ampliar el mapa pausa el seguimiento; el botón de ubicación lo
+  retoma. Un toque simple no lo pausa. Las animaciones respetan movimiento reducido.
+  El espacio reservado al panel inferior se ajusta a su altura para mantener
+  visible la moto y la atribución del mapa.
+- La geometría original y las paradas se conservan. Solo se dibuja el tramo
+  pendiente: el prefijo recorrido se oculta localmente, sin hacer reaparecerlo
+  por ruido GPS. Se rechaza el recorte con precisión peor que 50 m o a más de
+  35 m del trazado y se limita el avance para evitar saltos en cruces cercanos.
+  Se reinicia el progreso ante otro tramo/geometría. Nunca se unen puntos GPS
+  fuera de la carretera para inventar líneas ni se modifica la ubicación real.
+- Seguir la moto y recortar el dibujo no calcula rutas, no consulta Google ni
+  fabrica llegadas por proximidad. Se mantienen la captura 5/15 s, la cola
+  persistente y el envío configurado al backend. No cambia el contrato HTTP.
+
+- El backend inicia el desplazamiento y detecta la llegada a la
+  próxima parada con GPS real; Flutter no crea transiciones de llegada ni
+  calcula geocercas. El destino especial sin coordenadas conserva llegada manual.
+- El acuse GPS se mantiene independiente de la presentación. Sus eventos
+  `llegadas_detectadas` solicitan recuperar `llegada_actual` en `mi-ruta`.
+- Se comprueban jornada, asignación, parada y estado actuales antes de abrir
+  el formulario de foto de recolección o entrega. La foto realiza la transición
+  en el backend desde 0.36.0; recibir una llegada nunca completa el servicio.
+- Solo se abre en primer plano, con GPS disponible y sin otro formulario o
+  diálogo encima. Una llegada pendiente se recupera al volver a una pantalla
+  segura, reanudar o recuperar conectividad. No usa push ni abre enlaces externos.
+- Los eventos ya mostrados se recuerdan en memoria y almacenamiento seguro,
+  separados por cuenta y URL del servidor, para no repetir la apertura.
+- El mapa escucha los datos actualizados y selecciona la parada correspondiente;
+  una entrega exitosa continúa con la siguiente parada sin cerrar el mapa.
+- Verificación del frontend (2026-10-23): 208 pruebas automatizadas aprobadas y
+  análisis estático sin incidencias. Pendiente probar llegada física con GPS real
+  en un teléfono; las pruebas no hicieron llamadas a Google ni al backend real.
+
+#### Avisos diarios (contrato 0.33.0)
+
+- El backend decide vigencia por su día y zona `TIME_ZONE` y archiva historial.
+  Flutter no borra registros, no marca leídos en lote ni filtra por fecha local.
+- La campana refresca listado y conteo al abrirse, reanudar y al sincronizar
+  GPS tras un fallo. En primer plano consulta cada minuto; al pasar a segundo
+  plano cancela el temporizador. La siguiente consulta recoge el corte nocturno.
+- El panel observa datos en vivo y reemplaza la respuesta anterior. Mientras
+  consulta o falla la red, no presenta avisos remotos antiguos como actuales ni
+  muestra una lista vacía falsa; ofrece carga y reintento explícito.
+- Antes de navegar se marca leído para verificar vigencia. Un `404` retira el
+  ID de la caché visible, actualiza lista/contador y no navega ni reintenta ese ID.
+- Siguen visibles las alertas locales de problemas activos. El tablero se
+  refresca también para no recrear avisos de servicios que ya cerraron.
+- El número de la campana indica avisos nuevos, no tareas pendientes: abrirla
+  reconoce los recibidos sin borrarlos ni enviar un POST de lectura por aviso.
+  Se conservan también los avisos leídos hasta el archivado diario del servidor.
+  Las alertas operativas locales no inflan este contador. La marca de vistos se
+  recuerda en el dispositivo por cuenta/API, independiente de `leida` del backend;
+  solo nuevos avisos recibidos después vuelven a encender el indicador.
+- Verificación del frontend (2026-10-23): 226 pruebas aprobadas, incluidas las de
+  refresco diario, expiración, contador de nuevos y persistencia por cuenta;
+  análisis sin incidencias.
+  Pendiente comprobar el corte real en el teléfono con el backend actualizado.
 
 ### Supervisor / Operador
 

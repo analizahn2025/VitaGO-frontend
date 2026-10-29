@@ -15,12 +15,18 @@ class OperationalEvidence {
     this.driverId,
     this.type,
     this.notes,
+    this.requestStatus,
+    this.temperatureC,
+    this.temperatureSource,
   });
 
   factory OperationalEvidence.fromJson(Map<String, dynamic> json) {
     return OperationalEvidence(
       id: requireString(json, 'id'),
       requestId: optionalString(json, 'solicitud_id'),
+      requestStatus: optionalString(json, 'estado_solicitud'),
+      temperatureC: optionalString(json, 'temperatura_contenedor_c'),
+      temperatureSource: optionalString(json, 'fuente_temperatura'),
       incidentId: optionalString(json, 'incidencia_id'),
       driverId: optionalString(json, 'repartidor_id'),
       type: optionalString(json, 'tipo'),
@@ -37,6 +43,9 @@ class OperationalEvidence {
 
   final String id;
   final String? requestId;
+  final String? requestStatus;
+  final String? temperatureC;
+  final String? temperatureSource;
   final String? incidentId;
   final String? driverId;
   final String? type;
@@ -56,18 +65,18 @@ class EvidenceUploadInput {
     required this.fileName,
     required this.latitude,
     required this.longitude,
-    required this.capturedAt,
     this.type,
     this.notes,
+    this.temperatureC,
   });
 
   final String filePath;
   final String fileName;
   final String latitude;
   final String longitude;
-  final DateTime capturedAt;
   final String? type;
   final String? notes;
+  final String? temperatureC;
 }
 
 class EvidenceFile {

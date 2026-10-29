@@ -1,4 +1,7 @@
 import 'package:vitago_app/core/models/json_readers.dart';
+import 'package:vitago_app/features/routes/models/road_route_segment.dart';
+import 'package:vitago_app/features/routes/models/driver_route_flow.dart';
+import 'package:vitago_app/features/tracking/models/driver_arrival.dart';
 
 class DriverRoute {
   const DriverRoute({
@@ -12,10 +15,14 @@ class DriverRoute {
     this.routeId,
     this.currentVersion,
     this.nextStop,
+    this.currentArrival,
+    this.flow,
   });
 
   factory DriverRoute.fromJson(Map<String, dynamic> json) {
     final nextStop = optionalJsonMap(json, 'proxima_parada');
+    final arrival = parseDriverArrivals([json['llegada_actual']]).firstOrNull;
+    final flow = optionalJsonMap(json, 'flujo_actual');
     return DriverRoute(
       driverId: requireString(json, 'repartidor_id'),
       shiftId: optionalString(json, 'jornada_id'),
@@ -26,6 +33,8 @@ class DriverRoute {
       orderType: optionalString(json, 'orden_tipo') ?? 'ASIGNACION',
       routeCalculated: optionalBool(json, 'ruta_calculada'),
       nextStop: nextStop == null ? null : DriverRouteStop.fromJson(nextStop),
+      currentArrival: arrival,
+      flow: flow == null ? null : DriverRouteFlow.fromJson(flow),
       stops: jsonMapList(
         json['paradas'],
         'paradas de la ruta',
@@ -44,6 +53,8 @@ class DriverRoute {
   final String orderType;
   final bool routeCalculated;
   final DriverRouteStop? nextStop;
+  final DriverArrival? currentArrival;
+  final DriverRouteFlow? flow;
   final List<DriverRouteStop> stops;
   final RouteMapConfiguration map;
   final RoadRoute roadRoute;
@@ -61,6 +72,7 @@ class DriverRouteStop {
     required this.routePresentation,
     this.location,
     this.specialDestination,
+    this.tubeCount,
   });
 
   factory DriverRouteStop.fromJson(Map<String, dynamic> json) {
@@ -69,6 +81,7 @@ class DriverRouteStop {
       order: optionalInt(json, 'orden'),
       requestId: requireString(json, 'solicitud_id'),
       requestNumber: requireString(json, 'numero_solicitud'),
+      tubeCount: nullableInt(json, 'cantidad_tubos'),
       priority: requireString(json, 'prioridad'),
       modality: requireString(json, 'modalidad'),
       requestStatus: requireString(json, 'estado_solicitud'),
@@ -82,6 +95,7 @@ class DriverRouteStop {
   final int order;
   final String requestId;
   final String requestNumber;
+  final int? tubeCount;
   final String priority;
   final String modality;
   final String requestStatus;
@@ -168,6 +182,11 @@ class RoadRoute {
     this.retryFrom,
     this.estimatedDistanceMeters,
     this.estimatedDurationSeconds,
+    this.visualizationMode = 'UN_TRAMO',
+    this.breakdownAvailable = false,
+    this.requiresBreakdownUpdate = false,
+    this.currentSegmentId,
+    this.segments = const [],
   });
 
   factory RoadRoute.fromJson(Map<String, dynamic> json) {
@@ -193,6 +212,18 @@ class RoadRoute {
       originGps: origin == null ? null : RouteGpsOrigin.fromJson(origin),
       errorCode: optionalString(json, 'codigo_error'),
       retryFrom: optionalDateTime(json, 'reintento_desde'),
+      visualizationMode:
+          optionalString(json, 'modo_visualizacion') ?? 'UN_TRAMO',
+      breakdownAvailable: optionalBool(json, 'desglose_disponible'),
+      requiresBreakdownUpdate: optionalBool(
+        json,
+        'requiere_actualizar_desglose',
+      ),
+      currentSegmentId: optionalString(json, 'tramo_actual_id'),
+      segments: jsonMapList(
+        json['tramos'] ?? const [],
+        'tramos',
+      ).map(RoadRouteSegment.fromJson).toList(growable: false),
       metricsInResponse: optionalBool(json, 'metricas_en_respuesta'),
       estimatedDistanceMeters: _optionalDouble(
         json,
@@ -221,6 +252,26 @@ class RoadRoute {
   final bool metricsInResponse;
   final double? estimatedDistanceMeters;
   final double? estimatedDurationSeconds;
+  final String visualizationMode;
+  final bool breakdownAvailable;
+  final bool requiresBreakdownUpdate;
+  final String? currentSegmentId;
+  final List<RoadRouteSegment> segments;
+
+  RoadRouteSegment? segmentForStop(DriverRouteStop? stop) {
+    if (stop == null) return null;
+    return segments
+        .where(
+          (segment) =>
+              segment.id == '${stop.requestId}:${stop.type}' &&
+              segment.requestId == stop.requestId &&
+              segment.stopType == stop.type,
+        )
+        .firstOrNull;
+  }
+
+  bool get canUpdateBreakdown =>
+      status == 'CALCULADA' && requiresBreakdownUpdate && !breakdownAvailable;
 
   bool get canCalculate =>
       const {'PENDIENTE', 'ITINERARIO_CAMBIO'}.contains(status);

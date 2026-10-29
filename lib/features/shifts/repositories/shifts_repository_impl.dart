@@ -17,6 +17,17 @@ class ShiftsRepositoryImpl implements ShiftsRepository {
   Future<DriverShift?> getActiveShift() => _apiService.getActiveShift();
 
   @override
+  Future<ActiveShiftDay> getActiveShiftDay() => _apiService.getActiveShiftDay();
+
+  @override
+  Future<DriverShift> startLunch(String shiftId) =>
+      _apiService.startLunch(shiftId);
+
+  @override
+  Future<DriverShift> finishLunch(String shiftId) =>
+      _apiService.finishLunch(shiftId);
+
+  @override
   Future<PaginatedResult<DriverShift>> getShifts(ShiftQuery query) =>
       _apiService.getShifts(query);
 

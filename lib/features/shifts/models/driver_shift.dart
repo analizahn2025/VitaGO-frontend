@@ -26,6 +26,11 @@ class DriverShift {
     this.endLongitude,
     this.operationalMinutes,
     this.mileageQuality,
+    this.operationalDate,
+    this.scheduledCloseAt,
+    this.canOperate,
+    this.onLunch = false,
+    this.lunchIntervals = const [],
   });
 
   factory DriverShift.fromJson(Map<String, dynamic> json) {
@@ -63,6 +68,18 @@ class DriverShift {
       ),
       createdAt: requireDateTime(json, 'creado_en'),
       updatedAt: requireDateTime(json, 'actualizado_en'),
+      operationalDate: optionalString(json, 'fecha_operativa'),
+      scheduledCloseAt: optionalDateTime(json, 'cierre_programado_en'),
+      canOperate: json['puede_operar'] is bool
+          ? json['puede_operar'] as bool
+          : null,
+      onLunch: optionalBool(json, 'en_almuerzo'),
+      lunchIntervals: json['almuerzos'] is List
+          ? jsonMapList(
+              json['almuerzos'],
+              'almuerzos',
+            ).map(ShiftLunchInterval.fromJson).toList(growable: false)
+          : const [],
     );
   }
 
@@ -89,8 +106,87 @@ class DriverShift {
   final bool incidentsAvailable;
   final DateTime createdAt;
   final DateTime updatedAt;
+  final String? operationalDate;
+  final DateTime? scheduledCloseAt;
+  final bool? canOperate;
+  final bool onLunch;
+  final List<ShiftLunchInterval> lunchIntervals;
 
   bool get isActive => status.toUpperCase() == 'ACTIVA';
+  bool get isOperational => isActive && canOperate != false;
+}
+
+class ShiftLunchInterval {
+  const ShiftLunchInterval({
+    required this.id,
+    required this.startedAt,
+    this.finishedAt,
+    this.finishedById,
+    this.closureReason = '',
+  });
+
+  factory ShiftLunchInterval.fromJson(Map<String, dynamic> json) =>
+      ShiftLunchInterval(
+        id: requireString(json, 'id'),
+        startedAt: requireDateTime(json, 'iniciada_en'),
+        finishedAt: optionalDateTime(json, 'finalizada_en'),
+        finishedById: optionalString(json, 'finalizada_por_id'),
+        closureReason: optionalString(json, 'motivo_cierre') ?? '',
+      );
+
+  final String id;
+  final DateTime startedAt;
+  final DateTime? finishedAt;
+  final String? finishedById;
+  final String closureReason;
+}
+
+class ActiveShiftDay {
+  ActiveShiftDay({
+    required this.shift,
+    this.serverTime,
+    this.operationalDate,
+    this.operationalTimeZone,
+    this.scheduledCloseAt,
+    this.shiftStartedToday,
+    this.canStartShift,
+    this.closurePending = false,
+  }) : _serverClock = Stopwatch()..start();
+
+  factory ActiveShiftDay.fromJson(Map<String, dynamic> json) {
+    final shiftJson = optionalJsonMap(json, 'jornada');
+    return ActiveShiftDay(
+      shift: shiftJson == null ? null : DriverShift.fromJson(shiftJson),
+      serverTime: optionalDateTime(json, 'hora_servidor'),
+      operationalDate: optionalString(json, 'fecha_operativa'),
+      operationalTimeZone: optionalString(json, 'zona_horaria_operativa'),
+      scheduledCloseAt: optionalDateTime(json, 'cierre_programado_en'),
+      shiftStartedToday: json['jornada_iniciada_hoy'] is bool
+          ? json['jornada_iniciada_hoy'] as bool
+          : null,
+      canStartShift: json['puede_iniciar_jornada'] is bool
+          ? json['puede_iniciar_jornada'] as bool
+          : null,
+      closurePending: optionalBool(json, 'cierre_pendiente'),
+    );
+  }
+
+  final DriverShift? shift;
+  final DateTime? serverTime;
+  final String? operationalDate;
+  final String? operationalTimeZone;
+  final DateTime? scheduledCloseAt;
+  final bool? shiftStartedToday;
+  final bool? canStartShift;
+  final bool closurePending;
+  final Stopwatch _serverClock;
+
+  bool get supportsDailySchedule => canStartShift != null;
+  DateTime? get currentServerTime => serverTime?.add(_serverClock.elapsed);
+  bool get isAfterCut =>
+      currentServerTime != null &&
+      scheduledCloseAt != null &&
+      !currentServerTime!.isBefore(scheduledCloseAt!);
 }
 
 class ShiftCoordinatesInput {

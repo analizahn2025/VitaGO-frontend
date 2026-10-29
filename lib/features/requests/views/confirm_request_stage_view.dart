@@ -7,14 +7,17 @@ import 'package:image_picker/image_picker.dart';
 import 'package:vitago_app/app/theme/app_design_tokens.dart';
 import 'package:vitago_app/core/device/device_location_service.dart';
 import 'package:vitago_app/core/errors/app_failure.dart';
+import 'package:vitago_app/core/validation/operational_values.dart';
 import 'package:vitago_app/core/widgets/adaptive_form_row.dart';
 import 'package:vitago_app/features/evidence/controllers/evidence_controller.dart';
 import 'package:vitago_app/features/evidence/models/operational_evidence.dart';
 import 'package:vitago_app/features/evidence/providers/evidence_providers.dart';
+import 'package:vitago_app/features/fleet/controllers/fleet_controller.dart';
 import 'package:vitago_app/features/requests/controllers/request_stage_controller.dart';
 import 'package:vitago_app/features/requests/models/request_models.dart';
 import 'package:vitago_app/features/tracking/providers/tracking_providers.dart';
 import 'package:vitago_app/features/tracking/widgets/required_gps_body.dart';
+import 'package:vitago_app/features/routes/providers/routes_providers.dart';
 
 class ConfirmRequestStageView extends ConsumerStatefulWidget {
   const ConfirmRequestStageView({
@@ -34,20 +37,32 @@ class ConfirmRequestStageView extends ConsumerStatefulWidget {
 class _ConfirmRequestStageViewState
     extends ConsumerState<ConfirmRequestStageView> {
   XFile? _photo;
-  DateTime? _capturedAt;
   DeviceLocation? _location;
   bool _evidenceUploaded = false;
+  bool _mustVerify = false;
   bool _pickingPhoto = false;
   bool _locating = false;
   bool _submitting = false;
   String? _progressMessage;
   String? _error;
+  final _temperature = TextEditingController();
+  final _temperatureKey = GlobalKey<FormFieldState<String>>();
+  String? _temperatureError;
+
+  @override
+  void dispose() {
+    _temperature.dispose();
+    super.dispose();
+  }
 
   String get _requiredType => requestRequiredEvidenceType(widget.targetStatus)!;
 
   bool get _isPickup => widget.targetStatus == 'PICKED_UP';
 
   bool get _controlsLocked => _pickingPhoto || _submitting;
+
+  bool _isGpsEnabled(AsyncValue<bool> service) =>
+      !service.isLoading && !service.hasError && service.value == true;
 
   String get _actionName => _isPickup ? 'recolección' : 'entrega';
 
@@ -60,7 +75,8 @@ class _ConfirmRequestStageViewState
 
   @override
   Widget build(BuildContext context) {
-    final actionLabel = requestTransitionActionLabel(widget.targetStatus);
+    final actionLabel = _isPickup ? 'Foto de recolección' : 'Foto de entrega';
+    final gpsEnabled = _isGpsEnabled(ref.watch(locationServiceEnabledProvider));
     return Scaffold(
       appBar: AppBar(title: Text(actionLabel)),
       body: SafeArea(
@@ -81,7 +97,7 @@ class _ConfirmRequestStageViewState
               ),
               const SizedBox(height: AppSpacing.xl),
               Text(
-                'Confirma la $_actionName',
+                'Foto de $_actionName',
                 style: Theme.of(context).textTheme.headlineMedium,
               ),
               const SizedBox(height: AppSpacing.xs),
@@ -96,12 +112,33 @@ class _ConfirmRequestStageViewState
                 _CapturePanel(
                   photo: _photo,
                   isPickup: _isPickup,
-                  enabled: !_controlsLocked,
+                  enabled: !_controlsLocked && !_mustVerify,
                   onTap: () => _selectPhoto(camera: true),
                 )
               else
                 _SavedEvidenceNotice(actionName: _actionName),
               const SizedBox(height: AppSpacing.md),
+              if (_isPickup) ...[
+                TextFormField(
+                  key: _temperatureKey,
+                  controller: _temperature,
+                  enabled:
+                      !_controlsLocked && !_evidenceUploaded && !_mustVerify,
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                    signed: true,
+                  ),
+                  autovalidateMode: AutovalidateMode.onUserInteraction,
+                  decoration: InputDecoration(
+                    labelText: 'Temperatura del contenedor (°C)',
+                    hintText: 'Ejemplo: 4.50',
+                    errorText: _temperatureError,
+                  ),
+                  validator: containerTemperatureError,
+                  onChanged: (_) => setState(() => _temperatureError = null),
+                ),
+                const SizedBox(height: AppSpacing.md),
+              ],
               _LocationStatus(
                 isLocating: _locating,
                 isReady: _location != null,
@@ -130,9 +167,12 @@ class _ConfirmRequestStageViewState
           mainAxisSize: MainAxisSize.min,
           children: [
             FilledButton.icon(
-              onPressed: _controlsLocked
+              onPressed:
+                  _controlsLocked ||
+                      !gpsEnabled ||
+                      (_photo != null && _locating)
                   ? null
-                  : _photo == null && !_evidenceUploaded
+                  : _photo == null && !_evidenceUploaded && !_mustVerify
                   ? () => _selectPhoto(camera: true)
                   : _confirm,
               icon: _pickingPhoto || _submitting
@@ -147,10 +187,10 @@ class _ConfirmRequestStageViewState
                     ),
               label: Text(_primaryActionLabel),
             ),
-            if (!_evidenceUploaded && !_submitting) ...[
+            if (!_evidenceUploaded && !_submitting && !_mustVerify) ...[
               const SizedBox(height: AppSpacing.xxs),
               TextButton.icon(
-                onPressed: _controlsLocked
+                onPressed: _controlsLocked || !gpsEnabled
                     ? null
                     : () => _selectPhoto(camera: _photo != null),
                 icon: Icon(
@@ -171,9 +211,10 @@ class _ConfirmRequestStageViewState
 
   String get _primaryActionLabel {
     if (_progressMessage != null) return _progressMessage!;
-    if (_evidenceUploaded) return 'Completar $_actionName';
+    if (_evidenceUploaded) return 'Actualizar servicio';
+    if (_mustVerify) return 'Verificar estado del servicio';
     if (_photo == null) return 'Tomar foto';
-    return 'Confirmar $_actionName';
+    return 'Enviar foto y confirmar $_actionName';
   }
 
   Future<void> _recoverLostPhoto() async {
@@ -182,10 +223,7 @@ class _ConfirmRequestStageViewState
           .read(evidenceCaptureServiceProvider)
           .recoverLostPhoto();
       if (photo != null && mounted) {
-        setState(() {
-          _photo = photo;
-          _capturedAt = DateTime.now();
-        });
+        setState(() => _photo = photo);
       }
     } on Object {
       if (mounted) {
@@ -209,10 +247,7 @@ class _ConfirmRequestStageViewState
         setState(() => _error = 'La imagen no puede superar 10 MB.');
         return;
       }
-      setState(() {
-        _photo = photo;
-        _capturedAt = DateTime.now();
-      });
+      setState(() => _photo = photo);
     } on Object {
       if (mounted) setState(() => _error = 'No fue posible obtener la imagen.');
     } finally {
@@ -240,11 +275,21 @@ class _ConfirmRequestStageViewState
   }
 
   Future<void> _confirm() async {
-    if (!_evidenceUploaded && _photo == null) {
+    if (_controlsLocked || _locating) return;
+    if (!_isGpsEnabled(ref.read(locationServiceEnabledProvider))) return;
+    if (!_evidenceUploaded && !_mustVerify && _photo == null) {
       setState(() => _error = 'Toma o selecciona la fotografía requerida.');
       return;
     }
+    if (_isPickup &&
+        !_evidenceUploaded &&
+        !_mustVerify &&
+        !(_temperatureKey.currentState?.validate() ?? false)) {
+      return;
+    }
     if (_location == null) await _captureLocation();
+    if (!mounted) return;
+    if (!_isGpsEnabled(ref.read(locationServiceEnabledProvider))) return;
     final location = _location;
     if (location == null) {
       if (mounted) {
@@ -255,14 +300,34 @@ class _ConfirmRequestStageViewState
 
     setState(() {
       _submitting = true;
-      _progressMessage = _evidenceUploaded
-          ? 'Completando $_actionName…'
+      _progressMessage = _evidenceUploaded || _mustVerify
+          ? 'Verificando el servicio…'
           : 'Guardando la foto…';
       _error = null;
     });
     try {
       final actions = ref.read(requestStageActionsControllerProvider);
+      if (_mustVerify && !_evidenceUploaded) {
+        final recovered = await actions.recoverEvidenceStage(
+          request: widget.request,
+          targetStatus: widget.targetStatus,
+        );
+        if (!mounted) return;
+        if (!requestPhotoStageCompleted(
+          recovered.status,
+          widget.targetStatus,
+        )) {
+          setState(() {
+            _mustVerify = false;
+            _error = 'La foto no se registró. Puedes enviarla de nuevo.';
+          });
+          return;
+        }
+        _evidenceUploaded = true;
+      }
       if (!_evidenceUploaded) {
+        await actions.prepareSpecialPhoto(widget.request, location);
+        _mustVerify = true;
         await actions.uploadRequiredEvidence(
           request: widget.request,
           targetStatus: widget.targetStatus,
@@ -271,8 +336,10 @@ class _ConfirmRequestStageViewState
             fileName: _photo!.name,
             latitude: location.latitudeText,
             longitude: location.longitudeText,
-            capturedAt: _capturedAt ?? DateTime.now(),
             type: _requiredType,
+            temperatureC: _isPickup
+                ? normalizeTemperature(_temperature.text)
+                : null,
           ),
         );
         if (!mounted) return;
@@ -284,15 +351,23 @@ class _ConfirmRequestStageViewState
         );
         setState(() {
           _evidenceUploaded = true;
-          _progressMessage = 'Completando $_actionName…';
+          _progressMessage = 'Actualizando el servicio…';
         });
       }
 
-      final updated = await actions.completeTransition(
-        request: widget.request,
-        targetStatus: widget.targetStatus,
-        location: location,
-      );
+      // The 201 already confirmed the stage atomically. No transition POST.
+      final updated = await actions.refreshRequest(widget.request.id);
+      if (!requestPhotoStageCompleted(updated.status, widget.targetStatus)) {
+        throw const AppFailure(
+          message: 'La foto fue recibida. Falta recuperar el estado actualizado del servicio.',
+        );
+      }
+      if (!_isPickup && widget.request.isSpecial) {
+        await actions.confirmSpecialPhotoMeasurement(widget.request);
+      }
+      ref.invalidate(myRouteProvider);
+      ref.invalidate(ownDriverProfileControllerProvider);
+      await ref.read(myRouteProvider.future);
       if (!mounted) return;
       await HapticFeedback.mediumImpact();
       if (!mounted) return;
@@ -307,6 +382,12 @@ class _ConfirmRequestStageViewState
     } on AppFailure catch (failure) {
       if (mounted) {
         setState(() {
+          _temperatureError = failure.fieldMessage('temperatura_contenedor_c');
+          if (failure.statusCode == 400 &&
+              _temperatureError != null &&
+              !_evidenceUploaded) {
+            _mustVerify = false;
+          }
           _error = _failureMessage(failure);
           _progressMessage = null;
         });
@@ -322,8 +403,13 @@ class _ConfirmRequestStageViewState
   }
 
   String _failureMessage(AppFailure failure) {
+    final message =
+        failure.fieldMessage('archivo') ??
+        failure.fieldMessage('tipo') ??
+        failure.fieldMessage('estado_destino') ??
+        failure.message;
     final code = failure.statusCode;
-    return code == null ? failure.message : '${failure.message} (HTTP $code)';
+    return code == null ? message : '$message (HTTP $code)';
   }
 }
 
@@ -348,7 +434,7 @@ class _SavedEvidenceNotice extends StatelessWidget {
           const SizedBox(width: AppSpacing.sm),
           Expanded(
             child: Text(
-              'La foto ya está guardada. Toca el botón para completar la $actionName.',
+              'La foto ya confirmó la $actionName. Solo falta actualizar la información; no se enviará otra foto.',
               style: const TextStyle(fontWeight: FontWeight.w600),
             ),
           ),
@@ -389,7 +475,7 @@ class _StageProgress extends StatelessWidget {
         ),
         _ProgressStep(
           icon: Icons.check,
-          label: 'Confirmar',
+          label: 'Enviar',
           active: (hasPhoto && hasLocation) || isCompleting,
         ),
       ],

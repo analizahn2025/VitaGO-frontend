@@ -1,6 +1,8 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:vitago_app/core/device/device_location_service.dart';
 import 'package:vitago_app/core/errors/app_failure.dart';
+import 'package:vitago_app/core/models/paginated_result.dart';
+import 'package:vitago_app/core/time/server_time_clock.dart';
 import 'package:vitago_app/features/evidence/models/operational_evidence.dart';
 import 'package:vitago_app/features/evidence/repositories/evidence_repository.dart';
 import 'package:vitago_app/features/requests/controllers/request_stage_controller.dart';
@@ -18,146 +20,210 @@ void main() {
     longitude: -87.1921,
     recordedAt: _recordedAt,
   );
+  final pickupInput = EvidenceUploadInput(
+    temperatureC: '4.50',
+    filePath: 'foto.jpg',
+    fileName: 'foto.jpg',
+    latitude: '14.072300',
+    longitude: '-87.192100',
+    type: 'FOTO_RECOLECCION',
+  );
 
-  test('asocia cada cierre operativo con su evidencia obligatoria', () {
-    expect(requestRequiredEvidenceType('PICKED_UP'), 'FOTO_RECOLECCION');
-    expect(requestRequiredEvidenceType('DELIVERED'), 'FOTO_ENTREGA');
-    expect(requestRequiredEvidenceType('IN_TRANSIT'), isNull);
-  });
+  test(
+    'relaciona cada foto con la etapa operativa, no con un POST de transición',
+    () {
+      expect(requestRequiredEvidenceType('PICKED_UP'), 'FOTO_RECOLECCION');
+      expect(requestRequiredEvidenceType('DELIVERED'), 'FOTO_ENTREGA');
+      expect(requestRequiredEvidenceType('IN_TRANSIT'), isNull);
+      expect(requestPhotoStageCompleted('PICKED_UP', 'PICKED_UP'), isTrue);
+      expect(requestPhotoStageCompleted('IN_TRANSIT', 'PICKED_UP'), isTrue);
+      expect(requestPhotoStageCompleted('DELIVERED', 'DELIVERED'), isTrue);
+      expect(requestPhotoStageCompleted('CANCELLED', 'PICKED_UP'), isFalse);
+    },
+  );
 
-  test('sube FOTO_RECOLECCION antes de permitir la transición', () async {
-    final evidenceRepository = _EvidenceRepository(
-      response: _evidence('FOTO_RECOLECCION'),
-    );
-    final requestsRepository = _RequestsRepository();
+  test('bloquea inicios y confirmaciones normales del cliente', () async {
+    final repository = _RequestsRepository();
     final controller = RequestStageActionsController(
-      evidenceRepository,
-      requestsRepository,
+      _EvidenceRepository(response: _evidence('FOTO_RECOLECCION')),
+      repository,
       _trackingCoordinator(),
     );
-    final input = EvidenceUploadInput(
-      filePath: 'foto.jpg',
-      fileName: 'foto.jpg',
-      latitude: '14.072300',
-      longitude: '-87.192100',
-      capturedAt: _recordedAt,
-      type: 'FOTO_RECOLECCION',
-    );
-
-    final evidence = await controller.uploadRequiredEvidence(
-      request: _request('AT_PICKUP'),
-      targetStatus: 'PICKED_UP',
-      input: input,
-    );
-
-    expect(evidence.type, 'FOTO_RECOLECCION');
-    expect(evidenceRepository.lastRequestId, 'request-id');
-    expect(evidenceRepository.lastInput, same(input));
-    expect(requestsRepository.transitionCalls, 0);
+    for (final (status, target) in [
+      ('ASSIGNED', 'GOING_TO_PICKUP'),
+      ('GOING_TO_PICKUP', 'AT_PICKUP'),
+      ('AT_PICKUP', 'PICKED_UP'),
+      ('PICKED_UP', 'IN_TRANSIT'),
+      ('IN_TRANSIT', 'AT_DESTINATION'),
+      ('AT_DESTINATION', 'DELIVERED'),
+    ]) {
+      await expectLater(
+        controller.completeTransition(
+          request: _request(status),
+          targetStatus: target,
+          location: location,
+        ),
+        throwsA(isA<AppFailure>()),
+      );
+    }
+    expect(repository.transitionCalls, 0);
   });
 
-  test('rechaza FOTO_INCIDENCIA como confirmación de recolección', () async {
-    final evidenceRepository = _EvidenceRepository(
+  for (final status in ['PICKED_UP', 'IN_TRANSIT']) {
+    test(
+      'foto de recolección reconoce $status sin transición adicional',
+      () async {
+        final evidence = _EvidenceRepository(
+          response: _evidence('FOTO_RECOLECCION', status: status),
+        );
+        final repository = _RequestsRepository();
+        final controller = RequestStageActionsController(
+          evidence,
+          repository,
+          _trackingCoordinator(),
+        );
+        final result = await controller.uploadRequiredEvidence(
+          request: _request('AT_PICKUP'),
+          targetStatus: 'PICKED_UP',
+          input: pickupInput,
+        );
+        expect(result.requestStatus, status);
+        expect(evidence.uploadCalls, 1);
+        expect(repository.transitionCalls, 0);
+      },
+    );
+  }
+
+  test('FOTO_INCIDENCIA nunca confirma una etapa', () async {
+    final evidence = _EvidenceRepository(
       response: _evidence('FOTO_INCIDENCIA'),
     );
     final controller = RequestStageActionsController(
-      evidenceRepository,
+      evidence,
       _RequestsRepository(),
       _trackingCoordinator(),
     );
-
     await expectLater(
       controller.uploadRequiredEvidence(
         request: _request('AT_PICKUP'),
         targetStatus: 'PICKED_UP',
         input: EvidenceUploadInput(
-          filePath: 'incidencia.jpg',
-          fileName: 'incidencia.jpg',
-          latitude: '14.072300',
-          longitude: '-87.192100',
-          capturedAt: _recordedAt,
+          filePath: 'foto.jpg',
+          fileName: 'foto.jpg',
+          latitude: '14',
+          longitude: '-87',
           type: 'FOTO_INCIDENCIA',
         ),
       ),
       throwsA(isA<AppFailure>()),
     );
-    expect(evidenceRepository.uploadCalls, 0);
+    expect(evidence.uploadCalls, 0);
   });
 
   test(
-    'solo acepta la transición cuando vuelve el estado solicitado',
+    'no presenta como confirmada una respuesta de foto sin estado actualizado',
     () async {
-      final requestsRepository = _RequestsRepository(
-        response: _request('PICKED_UP'),
+      final evidence = _EvidenceRepository(
+        response: OperationalEvidence.fromJson({
+          'id': 'photo',
+          'solicitud_id': 'request-id',
+          'tipo': 'FOTO_RECOLECCION',
+          'tipo_contenido': 'image/jpeg',
+          'tamano_bytes': 3,
+          'latitud': '14',
+          'longitud': '-87',
+          'capturada_en': _recordedAt.toIso8601String(),
+          'creado_en': _recordedAt.toIso8601String(),
+          'archivo_disponible': true,
+          'estado_solicitud': 'AT_PICKUP',
+        }),
       );
+      final repository = _RequestsRepository();
       final controller = RequestStageActionsController(
-        _EvidenceRepository(response: _evidence('FOTO_RECOLECCION')),
-        requestsRepository,
+        evidence,
+        repository,
         _trackingCoordinator(),
       );
-
-      final updated = await controller.completeTransition(
-        request: _request('AT_PICKUP'),
-        targetStatus: 'PICKED_UP',
-        location: location,
+      await expectLater(
+        controller.uploadRequiredEvidence(
+          request: _request('AT_PICKUP'),
+          targetStatus: 'PICKED_UP',
+          input: pickupInput,
+        ),
+        throwsA(isA<AppFailure>()),
       );
-
-      expect(updated.status, 'PICKED_UP');
-      expect(requestsRepository.lastInput?.targetStatus, 'PICKED_UP');
-      expect(requestsRepository.lastInput?.latitude, '14.072300');
-      expect(requestsRepository.lastInput?.longitude, '-87.192100');
+      expect(repository.transitionCalls, 0);
     },
   );
 
-  test('no da por terminada una entrega con un estado inesperado', () async {
-    final requestsRepository = _RequestsRepository(
-      response: _request('AT_DESTINATION'),
+  for (final status in ['PICKED_UP', 'IN_TRANSIT']) {
+    test(
+      'recupera foto ya aplicada en $status con lecturas, sin reenviar',
+      () async {
+        final evidence = _EvidenceRepository(
+          response: _evidence('FOTO_RECOLECCION'),
+        );
+        final repository = _RequestsRepository(response: _request(status));
+        final controller = RequestStageActionsController(
+          evidence,
+          repository,
+          _trackingCoordinator(),
+        );
+        final result = await controller.recoverEvidenceStage(
+          request: _request('AT_PICKUP'),
+          targetStatus: 'PICKED_UP',
+        );
+        expect(result.status, status);
+        expect(evidence.uploadCalls, 0);
+        expect(evidence.readCalls, 1);
+        expect(repository.transitionCalls, 0);
+      },
     );
-    final controller = RequestStageActionsController(
-      _EvidenceRepository(response: _evidence('FOTO_ENTREGA')),
-      requestsRepository,
-      _trackingCoordinator(),
-    );
-
-    await expectLater(
-      controller.completeTransition(
-        request: _request('AT_DESTINATION'),
-        targetStatus: 'DELIVERED',
-        location: location,
-      ),
-      throwsA(
-        isA<AppFailure>().having(
-          (failure) => failure.message,
-          'message',
-          contains('AT_DESTINATION'),
-        ),
-      ),
-    );
-  });
+  }
 
   test(
-    'cierra un especial con manifiesto aunque el lote quede pendiente',
+    'finalizar especial envía GPS/manifiesto y conserva el lote offline',
     () async {
-      final requestsRepository = _RequestsRepository();
+      final repository = _RequestsRepository();
       final store = _RecordingTrackingQueueStore();
       final controller = RequestStageActionsController(
         _EvidenceRepository(response: _evidence('FOTO_ENTREGA')),
-        requestsRepository,
-        TrackingQueueCoordinator(store, _FailingTrackingRepository()),
+        repository,
+        TrackingQueueCoordinator(
+          store,
+          _FailingTrackingRepository(),
+          _serverTimeClock(),
+        ),
       );
-
-      final updated = await controller.completeTransition(
-        request: _request('AT_DESTINATION', special: true),
-        targetStatus: 'DELIVERED',
+      final result = await controller.completeTransition(
+        request: _request('IN_TRANSIT', special: true),
+        targetStatus: 'AT_DESTINATION',
         location: location,
       );
-
-      expect(updated.status, 'DELIVERED');
-      expect(requestsRepository.lastInput?.gpsSessions, hasLength(1));
-      expect(requestsRepository.lastInput?.gpsSessions?.single.lastSequence, 1);
+      expect(result.status, 'AT_DESTINATION');
+      expect(repository.lastInput!.gpsSessions!.single.lastSequence, 1);
       expect(await store.pendingCount('shift-id'), 1);
     },
   );
+
+  test('solo admite la transición excepcional cuando devuelve el estado solicitado', () async {
+    final repository = _RequestsRepository(response: _request('AT_PICKUP'));
+    final controller = RequestStageActionsController(
+      _EvidenceRepository(response: _evidence('FOTO_RECOLECCION')),
+      repository,
+      _trackingCoordinator(),
+    );
+    await expectLater(
+      controller.completeTransition(
+        request: _request('AT_PICKUP'),
+        targetStatus: 'PICKUP_FAILED',
+        location: location,
+        reason: 'No se pudo recolectar.',
+      ),
+      throwsA(isA<AppFailure>()),
+    );
+    expect(repository.transitionCalls, 1);
+  });
 }
 
 final _recordedAt = DateTime.utc(2026, 9, 30, 15);
@@ -211,11 +277,13 @@ ServiceRequestDetail _request(String status, {bool special = false}) {
   );
 }
 
-OperationalEvidence _evidence(String type) {
+OperationalEvidence _evidence(String type, {String? status}) {
   return OperationalEvidence(
     id: 'evidence-id',
     requestId: 'request-id',
     type: type,
+    requestStatus:
+        status ?? (type == 'FOTO_RECOLECCION' ? 'IN_TRANSIT' : 'DELIVERED'),
     contentType: 'image/jpeg',
     sizeBytes: 1024,
     latitude: '14.072300',
@@ -231,8 +299,22 @@ class _EvidenceRepository implements EvidenceRepository {
 
   final OperationalEvidence response;
   int uploadCalls = 0;
+  int readCalls = 0;
   String? lastRequestId;
   EvidenceUploadInput? lastInput;
+  @override
+  Future<PaginatedResult<OperationalEvidence>> getRequestEvidence({
+    required String requestId,
+    required int page,
+  }) async {
+    readCalls++;
+    return const PaginatedResult(
+      count: 0,
+      items: [],
+      hasNext: false,
+      hasPrevious: false,
+    );
+  }
 
   @override
   Future<OperationalEvidence> uploadRequestEvidence(
@@ -255,6 +337,9 @@ class _RequestsRepository implements RequestsRepository {
   final ServiceRequestDetail? response;
   int transitionCalls = 0;
   RequestTransitionInput? lastInput;
+  @override
+  Future<ServiceRequestDetail> getRequest(String id) async =>
+      response ?? _request('AT_PICKUP');
 
   @override
   Future<ServiceRequestDetail> transitionRequest(
@@ -285,8 +370,20 @@ class _TrackingRepository implements TrackingRepository {
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
-TrackingQueueCoordinator _trackingCoordinator() =>
-    TrackingQueueCoordinator(_TrackingQueueStore(), _TrackingRepository());
+TrackingQueueCoordinator _trackingCoordinator() => TrackingQueueCoordinator(
+  _TrackingQueueStore(),
+  _TrackingRepository(),
+  _serverTimeClock(),
+);
+
+ServerTimeClock _serverTimeClock() {
+  final clock = ServerTimeClock.withElapsedReader(() => Duration.zero);
+  clock.synchronize(
+    serverTime: _recordedAt,
+    operationalTimeZone: 'America/Tegucigalpa',
+  );
+  return clock;
+}
 
 class _TrackingQueueStore implements TrackingQueueStore {
   @override

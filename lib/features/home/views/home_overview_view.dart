@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:vitago_app/core/permissions/administrative_scope.dart';
+import 'package:vitago_app/features/organizations/views/driver_limits_view.dart';
 import 'package:vitago_app/app/config/app_config.dart';
 import 'package:vitago_app/app/theme/app_design_tokens.dart';
 import 'package:vitago_app/core/permissions/app_permissions.dart';
@@ -15,6 +17,7 @@ class HomeOverviewView extends StatelessWidget {
     required this.profile,
     required this.availableSections,
     required this.onSelectSection,
+    this.isActive = true,
     super.key,
   });
 
@@ -22,6 +25,7 @@ class HomeOverviewView extends StatelessWidget {
   final UserProfile profile;
   final List<AppSection> availableSections;
   final ValueChanged<AppSection> onSelectSection;
+  final bool isActive;
 
   @override
   Widget build(BuildContext context) {
@@ -96,6 +100,7 @@ class HomeOverviewView extends StatelessWidget {
                 profile.can(AppPermissions.viewAssignedRequests)))
           RequestSummarySection(
             profile: profile,
+            isActive: isActive,
             onOpenRequests: () => onSelectSection(AppSection.requests),
           ),
         Padding(
@@ -141,6 +146,18 @@ class HomeOverviewView extends StatelessWidget {
               subtitle: Text(_sectionDescription(section)),
               trailing: const Icon(Icons.chevron_right),
               onTap: () => onSelectSection(section),
+            ),
+          ),
+        if (config.isExternal && canEditDriverLimits(profile, corporate: false))
+          ListTile(
+            leading: const Icon(Icons.tune),
+            title: const Text('Cupos de Network'),
+            subtitle: const Text('Configuración general de la red'),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => Navigator.of(context).push<void>(
+              MaterialPageRoute(
+                builder: (_) => DriverLimitsView(profile: profile),
+              ),
             ),
           ),
         if (profile.can(AppPermissions.viewVehicles) ||

@@ -25,6 +25,10 @@ class _AssignRequestViewState extends ConsumerState<AssignRequestView> {
   bool _saving = false;
   String? _error;
 
+  bool get _isReplacement =>
+      widget.request.summary.pendingReassignment ||
+      widget.request.assignedDriverId != null;
+
   @override
   void dispose() {
     _reason.dispose();
@@ -33,14 +37,24 @@ class _AssignRequestViewState extends ConsumerState<AssignRequestView> {
 
   @override
   Widget build(BuildContext context) {
-    final drivers = ref.watch(availableDriversControllerProvider);
+    final count = widget.request.summary.tubeCount;
+    if (count == null) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('Asignar motorista')),
+        body: const SafeArea(
+          child: AppEmptyView(
+            icon: Icons.science_outlined,
+            title: 'Cantidad de tubos sin declarar',
+            message: 'Regulariza la cantidad de tubos desde el detalle antes de asignar este envío.',
+          ),
+        ),
+      );
+    }
+    final provider = availableDriversForRequestControllerProvider(count);
+    final drivers = ref.watch(provider);
     return Scaffold(
       appBar: AppBar(
-        title: Text(
-          widget.request.assignedDriverId == null
-              ? 'Asignar motorista'
-              : 'Reasignar motorista',
-        ),
+        title: Text(_isReplacement ? 'Asignar reemplazo' : 'Asignar motorista'),
       ),
       body: SafeArea(
         child: drivers.when(
@@ -48,7 +62,7 @@ class _AssignRequestViewState extends ConsumerState<AssignRequestView> {
               const AppLoadingView(label: 'Buscando motoristas disponibles…'),
           error: (error, stackTrace) => AppErrorView(
             error: error,
-            onRetry: () => ref.invalidate(availableDriversControllerProvider),
+            onRetry: () => ref.invalidate(provider),
           ),
           data: (result) {
             final config = ref.watch(appConfigProvider);
@@ -66,6 +80,7 @@ class _AssignRequestViewState extends ConsumerState<AssignRequestView> {
   }
 
   Widget _buildForm(List<DriverProfile> drivers) {
+    if (!drivers.any((driver) => driver.id == _driverId)) _driverId = null;
     return ListView(
       padding: const EdgeInsets.all(AppSpacing.lg),
       children: [
@@ -77,6 +92,12 @@ class _AssignRequestViewState extends ConsumerState<AssignRequestView> {
         Text(
           '${widget.request.summary.origin.name} → ${widget.request.summary.destinationName}',
         ),
+        if (widget.request.summary.pendingReassignment) ...[
+          const SizedBox(height: AppSpacing.md),
+          const Text(
+            'La solicitud conservará su fase actual. Si ya fue recolectada, coordina el traspaso físico fuera de la aplicación.',
+          ),
+        ],
         if (_error case final error?) ...[
           const SizedBox(height: AppSpacing.md),
           Text(
@@ -89,10 +110,11 @@ class _AssignRequestViewState extends ConsumerState<AssignRequestView> {
           const AppEmptyView(
             icon: Icons.no_accounts_outlined,
             title: 'No hay motoristas disponibles',
-            message: 'Se necesita un motorista activo, disponible, con motocicleta activa y menos de cinco servicios.',
+            message: 'No hay motoristas elegibles con cupo para estos tubos y solicitudes.',
           )
         else ...[
           DropdownButtonFormField<String>(
+            key: ValueKey(drivers.map((driver) => driver.id).join(',')),
             initialValue: _driverId,
             isExpanded: true,
             decoration: const InputDecoration(labelText: 'Motorista'),
@@ -101,7 +123,7 @@ class _AssignRequestViewState extends ConsumerState<AssignRequestView> {
                   (driver) => DropdownMenuItem(
                     value: driver.id,
                     child: Text(
-                      '${driver.user.fullName} · ${driver.vehicle?.plate ?? 'Sin vehículo'}',
+                      '${driver.user.fullName} · ${driver.availableTubes == null ? 'Cupo según servidor' : '${driver.availableTubes} tubos libres'}',
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),
@@ -133,9 +155,7 @@ class _AssignRequestViewState extends ConsumerState<AssignRequestView> {
                   )
                 : const Icon(Icons.assignment_ind_outlined),
             label: Text(
-              widget.request.assignedDriverId == null
-                  ? 'Asignar motorista'
-                  : 'Confirmar reasignación',
+              _isReplacement ? 'Confirmar reemplazo' : 'Asignar motorista',
             ),
           ),
         ],
@@ -157,7 +177,17 @@ class _AssignRequestViewState extends ConsumerState<AssignRequestView> {
           );
       if (mounted) Navigator.of(context).pop(true);
     } on AppFailure catch (failure) {
-      if (mounted) setState(() => _error = failure.message);
+      if (mounted) {
+        ref.invalidate(
+          availableDriversForRequestControllerProvider(
+            widget.request.summary.tubeCount!,
+          ),
+        );
+        setState(
+          () =>
+              _error = failure.fieldMessage('repartidor_id') ?? failure.message,
+        );
+      }
     } finally {
       if (mounted) setState(() => _saving = false);
     }

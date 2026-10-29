@@ -45,7 +45,10 @@ class DeliveryRequestTile extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(width: AppSpacing.xs),
-                    StatusBadge(status: request.status),
+                    StatusBadge(
+                      status: request.status,
+                      label: request.displayStatusLabel,
+                    ),
                   ],
                 ),
                 if (request.isPriority) ...[
@@ -58,7 +61,19 @@ class DeliveryRequestTile extends StatelessWidget {
                     ),
                   ),
                 ],
+                if (request.pendingReassignment) ...[
+                  const SizedBox(height: AppSpacing.xxs),
+                  Text(
+                    'Pendiente de reasignación',
+                    style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                      color: colors.tertiary,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ],
                 const SizedBox(height: AppSpacing.sm),
+                Text('Tubos: ${request.tubeCount ?? 'Sin declarar'}'),
+                const SizedBox(height: AppSpacing.xs),
                 _RouteLine(icon: Icons.trip_origin, value: request.origin.name),
                 const SizedBox(height: AppSpacing.xs),
                 _RouteLine(

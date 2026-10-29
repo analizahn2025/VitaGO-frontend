@@ -18,6 +18,11 @@ abstract interface class RequestsRepository {
   );
 
   Future<ServiceRequestDetail> getRequest(String requestId);
+  Future<ServiceRequestDetail> updateTubeCount(
+    String requestId,
+    int count,
+    String reason,
+  );
 
   Future<ServiceRequestDetail> createRequest(CreateServiceRequestInput input);
 

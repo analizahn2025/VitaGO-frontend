@@ -72,4 +72,17 @@ void main() {
       isFalse,
     );
   });
+
+  test('solo un superadministrador gestiona otro superadministrador', () {
+    final master = target(AppRoles.masterAdmin);
+
+    expect(
+      UserManagementPolicy.canManage(actor(AppRoles.corporateAdmin), master),
+      isFalse,
+    );
+    expect(
+      UserManagementPolicy.canManage(actor(AppRoles.masterAdmin), master),
+      isTrue,
+    );
+  });
 }

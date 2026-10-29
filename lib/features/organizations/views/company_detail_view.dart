@@ -9,6 +9,7 @@ import 'package:vitago_app/features/organizations/controllers/organizations_cont
 import 'package:vitago_app/features/organizations/models/company.dart';
 import 'package:vitago_app/features/organizations/views/branch_detail_view.dart';
 import 'package:vitago_app/features/organizations/views/create_branch_view.dart';
+import 'package:vitago_app/features/organizations/views/driver_limits_view.dart';
 import 'package:vitago_app/features/profile/models/user_profile.dart';
 
 class CompanyDetailView extends ConsumerStatefulWidget {
@@ -56,6 +57,18 @@ class _CompanyDetailViewState extends ConsumerState<CompanyDetailView> {
 
   Widget _buildBody(BuildContext context) {
     if (!widget.profile.can(AppPermissions.viewBranches)) {
+      if (widget.profile.can(AppPermissions.viewCompanies)) {
+        return ListView(
+          padding: const EdgeInsets.all(AppSpacing.lg),
+          children: [
+            Text(
+              widget.companyName,
+              style: Theme.of(context).textTheme.headlineSmall,
+            ),
+            _limitsEntry(),
+          ],
+        );
+      }
       return const AppEmptyView(
         icon: Icons.store_mall_directory_outlined,
         title: 'Sin acceso a sucursales',
@@ -100,11 +113,19 @@ class _CompanyDetailViewState extends ConsumerState<CompanyDetailView> {
             separatorBuilder: (context, index) => const Divider(height: 1),
             itemBuilder: (context, index) {
               if (index == 0) {
-                return _CompanyHeader(
-                  company: company,
-                  companyName: widget.companyName,
-                  canCreate: widget.profile.can(AppPermissions.manageBranches),
-                  onCreate: _openCreateBranch,
+                return Column(
+                  children: [
+                    _CompanyHeader(
+                      company: company,
+                      companyName: widget.companyName,
+                      canCreate: widget.profile.can(
+                        AppPermissions.manageBranches,
+                      ),
+                      onCreate: _openCreateBranch,
+                    ),
+                    if (widget.profile.can(AppPermissions.viewCompanies))
+                      _limitsEntry(),
+                  ],
                 );
               }
               if (index == result.items.length + 1) {
@@ -148,6 +169,21 @@ class _CompanyDetailViewState extends ConsumerState<CompanyDetailView> {
       },
     );
   }
+
+  Widget _limitsEntry() => ListTile(
+    leading: const Icon(Icons.tune),
+    title: const Text('Cupos de motoristas'),
+    subtitle: const Text('Consultar o configurar los límites aplicados'),
+    trailing: const Icon(Icons.chevron_right),
+    onTap: () => Navigator.of(context).push<bool>(
+      MaterialPageRoute(
+        builder: (_) => DriverLimitsView(
+          profile: widget.profile,
+          companyId: widget.companyId,
+        ),
+      ),
+    ),
+  );
 
   Future<void> _openCreateBranch() async {
     final created = await Navigator.of(context).push<bool>(

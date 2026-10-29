@@ -52,7 +52,10 @@ class _RequestEvidenceSectionState
                 contentPadding: EdgeInsets.zero,
                 leading: const Icon(Icons.image_outlined),
                 title: Text(_typeLabel(item.type)),
-                subtitle: Text(AppDateFormat.dateTime(item.capturedAt)),
+                subtitle: Text(
+                  'Registrada · ${AppDateFormat.dateTime(item.capturedAt)}'
+                  '${item.type == 'FOTO_RECOLECCION' ? '\nTemperatura: ${item.temperatureC == null ? 'Sin registrar' : '${item.temperatureC} °C'}${item.temperatureSource == 'MANUAL' ? ' · Manual' : ''}' : ''}',
+                ),
                 trailing: item.fileAvailable
                     ? const Icon(Icons.open_in_new)
                     : const Icon(Icons.hide_image_outlined),

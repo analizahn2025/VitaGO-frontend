@@ -35,6 +35,7 @@ class CreateServiceRequestInput {
     required this.serviceTypeId,
     required this.originId,
     required this.items,
+    required this.tubeCount,
     this.branchId,
     this.destinationId,
     this.specialDestination,
@@ -51,6 +52,7 @@ class CreateServiceRequestInput {
   final String? specialDestination;
   final String? notes;
   final List<RequestArticleInput> items;
+  final int tubeCount;
 
   Map<String, dynamic> toJson() => {
     'empresa_id': companyId,
@@ -63,6 +65,7 @@ class CreateServiceRequestInput {
     'destino_especial': _nullable(specialDestination),
     'notas': _nullable(notes),
     'articulos': items.map((item) => item.toJson()).toList(growable: false),
+    'cantidad_tubos': tubeCount,
   };
 }
 
@@ -106,11 +109,13 @@ class RequestTransitionInput {
 }
 
 class GpsSynchronizationInput {
-  const GpsSynchronizationInput(this.sessions);
+  const GpsSynchronizationInput(this.sessions, {this.movementId});
 
   final List<GpsSessionManifest> sessions;
+  final String? movementId;
 
   Map<String, dynamic> toJson() => {
+    if (movementId != null) 'movimiento_id': movementId,
     'sesiones_gps': sessions
         .map((session) => session.toJson())
         .toList(growable: false),

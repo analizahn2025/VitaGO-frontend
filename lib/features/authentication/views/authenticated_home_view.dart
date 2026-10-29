@@ -18,6 +18,7 @@ import 'package:vitago_app/features/profile/models/user_profile.dart';
 import 'package:vitago_app/features/profile/views/profile_view.dart';
 import 'package:vitago_app/features/requests/views/requests_view.dart';
 import 'package:vitago_app/features/tracking/widgets/driver_automatic_tracking.dart';
+import 'package:vitago_app/features/tracking/widgets/driver_arrival_listener.dart';
 import 'package:vitago_app/features/user_administration/views/users_view.dart';
 
 class AuthenticatedHomeView extends ConsumerWidget {
@@ -83,77 +84,86 @@ class _AuthenticatedShellState extends ConsumerState<_AuthenticatedShell> {
         : navigationSections.first;
     final selectedIndex = navigationSections.indexOf(selected);
     _loadedSections.add(selected);
-    return DriverAutomaticTracking(
-      enabled:
-          widget.profile.isDriver &&
-          widget.profile.can(AppPermissions.registerDriverLocation),
-      child: Scaffold(
-        appBar: AppBar(
-          leadingWidth: 60,
-          leading: Padding(
-            padding: const EdgeInsets.only(
-              left: AppSpacing.md,
-              top: AppSpacing.xs,
-              bottom: AppSpacing.xs,
-            ),
-            child: ProductBrandMark(isCorporate: config.isCorporate, size: 40),
-          ),
-          title: Text(config.appName),
-          actions: [
-            if (widget.profile.isDriver)
-              const DriverAlertsButton()
-            else
-              IconButton(
-                onPressed: () => ref
-                    .read(profileControllerProvider.notifier)
-                    .refreshProfile(),
-                tooltip: 'Actualizar perfil',
-                icon: const Icon(Icons.sync),
+    return DriverArrivalListener(
+      key: ValueKey(widget.profile.user.id),
+      profile: widget.profile,
+      child: DriverAutomaticTracking(
+        enabled:
+            widget.profile.isDriver &&
+            widget.profile.can(AppPermissions.registerDriverLocation),
+        child: Scaffold(
+          appBar: AppBar(
+            leadingWidth: 60,
+            leading: Padding(
+              padding: const EdgeInsets.only(
+                left: AppSpacing.md,
+                top: AppSpacing.xs,
+                bottom: AppSpacing.xs,
               ),
-          ],
-        ),
-        body: SafeArea(
-          child: SizedBox.expand(
-            child: IndexedStack(
-              index: selectedIndex,
-              children: [
-                for (final section in navigationSections)
-                  KeyedSubtree(
-                    key: ValueKey<AppSection>(section),
-                    child: _loadedSections.contains(section)
-                        ? _sectionView(
-                            section,
-                            config,
-                            widget.profile,
-                            availableSections,
-                            navigationSections,
-                          )
-                        : const SizedBox.shrink(),
-                  ),
-              ],
+              child: ProductBrandMark(
+                isCorporate: config.isCorporate,
+                size: 40,
+              ),
+            ),
+            title: Text(config.appName),
+            actions: [
+              if (widget.profile.isDriver)
+                DriverAlertsButton(
+                  ownerKey: '${config.apiBaseUri}|${widget.profile.user.id}',
+                )
+              else
+                IconButton(
+                  onPressed: () => ref
+                      .read(profileControllerProvider.notifier)
+                      .refreshProfile(),
+                  tooltip: 'Actualizar perfil',
+                  icon: const Icon(Icons.sync),
+                ),
+            ],
+          ),
+          body: SafeArea(
+            child: SizedBox.expand(
+              child: IndexedStack(
+                index: selectedIndex,
+                children: [
+                  for (final section in navigationSections)
+                    KeyedSubtree(
+                      key: ValueKey<AppSection>(section),
+                      child: _loadedSections.contains(section)
+                          ? _sectionView(
+                              section,
+                              config,
+                              widget.profile,
+                              availableSections,
+                              navigationSections,
+                            )
+                          : const SizedBox.shrink(),
+                    ),
+                ],
+              ),
             ),
           ),
-        ),
-        bottomNavigationBar: NavigationBar(
-          selectedIndex: selectedIndex,
-          onDestinationSelected: (index) {
-            setState(() {
-              _selected = navigationSections[index];
-              _loadedSections.add(_selected);
-              if (_selected == AppSection.operations) {
-                _operationsActivationToken++;
-              }
-            });
-          },
-          destinations: navigationSections
-              .map(
-                (section) => NavigationDestination(
-                  icon: Icon(section.icon),
-                  selectedIcon: Icon(section.selectedIcon),
-                  label: section.label,
-                ),
-              )
-              .toList(growable: false),
+          bottomNavigationBar: NavigationBar(
+            selectedIndex: selectedIndex,
+            onDestinationSelected: (index) {
+              setState(() {
+                _selected = navigationSections[index];
+                _loadedSections.add(_selected);
+                if (_selected == AppSection.operations) {
+                  _operationsActivationToken++;
+                }
+              });
+            },
+            destinations: navigationSections
+                .map(
+                  (section) => NavigationDestination(
+                    icon: Icon(section.icon),
+                    selectedIcon: Icon(section.selectedIcon),
+                    label: section.label,
+                  ),
+                )
+                .toList(growable: false),
+          ),
         ),
       ),
     );
@@ -170,6 +180,7 @@ class _AuthenticatedShellState extends ConsumerState<_AuthenticatedShell> {
       AppSection.home => HomeOverviewView(
         config: config,
         profile: profile,
+        isActive: _selected == AppSection.home,
         availableSections: availableSections,
         onSelectSection: (value) => _openSection(
           value,
@@ -182,7 +193,12 @@ class _AuthenticatedShellState extends ConsumerState<_AuthenticatedShell> {
       AppSection.organizations => OrganizationsView(profile: profile),
       AppSection.users => UsersView(profile: profile),
       AppSection.locations => LocationsView(profile: profile),
-      AppSection.requests => RequestsView(profile: profile),
+      AppSection.requests => RequestsView(
+        profile: profile,
+        isActive:
+            _selected == AppSection.requests ||
+            !navigationSections.contains(AppSection.requests),
+      ),
       AppSection.operations => OperationsView(
         profile: profile,
         activationToken: _operationsActivationToken,

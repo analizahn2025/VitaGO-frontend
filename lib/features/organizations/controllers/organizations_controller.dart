@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:vitago_app/features/organizations/models/driver_limits.dart';
 import 'package:vitago_app/core/models/paginated_result.dart';
 import 'package:vitago_app/features/organizations/models/branch.dart';
 import 'package:vitago_app/features/organizations/models/company.dart';
@@ -6,6 +7,12 @@ import 'package:vitago_app/features/organizations/providers/organizations_provid
 import 'package:vitago_app/features/organizations/repositories/organizations_repository.dart';
 
 typedef BranchPageQuery = ({String companyId, int page});
+
+final driverLimitsControllerProvider = FutureProvider.autoDispose
+    .family<DriverLimits, String?>(
+      (ref, companyId) =>
+          ref.watch(organizationsRepositoryProvider).getDriverLimits(companyId),
+    );
 
 final companiesControllerProvider = FutureProvider.autoDispose
     .family<PaginatedResult<Company>, int>((ref, page) {
@@ -56,6 +63,11 @@ class OrganizationActionsController {
   const OrganizationActionsController(this._repository);
 
   final OrganizationsRepository _repository;
+
+  Future<DriverLimits> updateDriverLimits(
+    String? companyId,
+    UpdateDriverLimitsInput input,
+  ) => _repository.updateDriverLimits(companyId, input);
 
   Future<Branch> createBranch({
     required String companyId,

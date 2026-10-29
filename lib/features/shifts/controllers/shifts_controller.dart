@@ -11,6 +11,11 @@ final activeShiftControllerProvider = FutureProvider.autoDispose<DriverShift?>((
   return ref.watch(shiftsRepositoryProvider).getActiveShift();
 });
 
+final activeShiftDayControllerProvider =
+    FutureProvider.autoDispose<ActiveShiftDay>((ref) {
+      return ref.watch(shiftsRepositoryProvider).getActiveShiftDay();
+    });
+
 final shiftsControllerProvider = FutureProvider.autoDispose
     .family<PaginatedResult<DriverShift>, ShiftQuery>((ref, query) {
       return ref.watch(shiftsRepositoryProvider).getShifts(query);
@@ -37,6 +42,12 @@ class ShiftActionsController {
 
   Future<DriverShift> start(ShiftCoordinatesInput input) =>
       _repository.startShift(input);
+
+  Future<DriverShift> startLunch(String shiftId) =>
+      _repository.startLunch(shiftId);
+
+  Future<DriverShift> finishLunch(String shiftId) =>
+      _repository.finishLunch(shiftId);
 
   Future<DriverShift> finish(String shiftId, ShiftCoordinatesInput input) =>
       _repository.finishShift(shiftId, input);

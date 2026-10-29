@@ -34,6 +34,17 @@ bool optionalBool(
   return value is bool ? value : fallback;
 }
 
+int? nullableInt(Map<String, dynamic> json, String key) {
+  final value = json[key];
+  if (value == null) return null;
+  if (value is int) return value;
+  final result = int.tryParse(value.toString());
+  if (result == null) {
+    throw FormatException('El campo $key no contiene un entero válido.');
+  }
+  return result;
+}
+
 int optionalInt(Map<String, dynamic> json, String key, {int fallback = 0}) {
   final value = json[key];
   if (value is int) {

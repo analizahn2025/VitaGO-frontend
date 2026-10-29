@@ -95,8 +95,16 @@ class DriverProfile {
     this.activeRequests = 0,
     this.requestLimit = 5,
     this.canReceiveRequests = false,
+    this.tubeLimit,
+    this.committedTubes,
+    this.transportedTubes,
+    this.reservedTubes,
+    this.availableTubes,
+    this.requestsWithoutTubeCount,
     this.companyId,
     this.vehicle,
+    this.onLunch = false,
+    this.lunchStartedAt,
   });
 
   factory DriverProfile.fromJson(Map<String, dynamic> json) {
@@ -107,10 +115,21 @@ class DriverProfile {
       companyId: optionalString(json, 'empresa_id'),
       vehicle: vehicleJson == null ? null : Vehicle.fromJson(vehicleJson),
       operationalStatus: requireString(json, 'estado_operativo'),
+      onLunch: optionalBool(json, 'en_almuerzo'),
+      lunchStartedAt: optionalDateTime(json, 'almuerzo_iniciado_en'),
       capacity: requireString(json, 'capacidad'),
       activeRequests: optionalInt(json, 'solicitudes_activas'),
       requestLimit: optionalInt(json, 'limite_solicitudes', fallback: 5),
       canReceiveRequests: optionalBool(json, 'puede_recibir_solicitudes'),
+      tubeLimit: nullableInt(json, 'limite_tubos'),
+      committedTubes: nullableInt(json, 'tubos_comprometidos'),
+      transportedTubes: nullableInt(json, 'tubos_en_transporte'),
+      reservedTubes: nullableInt(json, 'tubos_reservados'),
+      availableTubes: nullableInt(json, 'tubos_disponibles'),
+      requestsWithoutTubeCount: nullableInt(
+        json,
+        'solicitudes_sin_cantidad_tubos',
+      ),
       active: optionalBool(json, 'activo'),
       createdAt: requireDateTime(json, 'creado_en'),
       updatedAt: requireDateTime(json, 'actualizado_en'),
@@ -122,10 +141,18 @@ class DriverProfile {
   final String? companyId;
   final Vehicle? vehicle;
   final String operationalStatus;
+  final bool onLunch;
+  final DateTime? lunchStartedAt;
   final String capacity;
   final int activeRequests;
   final int requestLimit;
   final bool canReceiveRequests;
+  final int? tubeLimit;
+  final int? committedTubes;
+  final int? transportedTubes;
+  final int? reservedTubes;
+  final int? availableTubes;
+  final int? requestsWithoutTubeCount;
   final bool active;
   final DateTime createdAt;
   final DateTime updatedAt;
@@ -174,6 +201,7 @@ class DriverQuery {
     this.operationalStatus,
     this.capacity,
     this.active,
+    this.onLunch,
     this.page = 1,
     this.pageSize = 20,
   });
@@ -182,6 +210,7 @@ class DriverQuery {
   final String? operationalStatus;
   final String? capacity;
   final bool? active;
+  final bool? onLunch;
   final int page;
   final int pageSize;
 
@@ -192,6 +221,7 @@ class DriverQuery {
     if (operationalStatus != null) 'estado_operativo': operationalStatus,
     if (capacity != null) 'capacidad': capacity,
     if (active != null) 'activo': active,
+    if (onLunch != null) 'en_almuerzo': onLunch,
   };
 
   @override
@@ -201,6 +231,7 @@ class DriverQuery {
         other.operationalStatus == operationalStatus &&
         other.capacity == capacity &&
         other.active == active &&
+        other.onLunch == onLunch &&
         other.page == page &&
         other.pageSize == pageSize;
   }
@@ -211,6 +242,7 @@ class DriverQuery {
     operationalStatus,
     capacity,
     active,
+    onLunch,
     page,
     pageSize,
   );

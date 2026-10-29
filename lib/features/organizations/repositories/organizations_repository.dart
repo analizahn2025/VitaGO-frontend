@@ -1,8 +1,14 @@
 import 'package:vitago_app/core/models/paginated_result.dart';
 import 'package:vitago_app/features/organizations/models/branch.dart';
 import 'package:vitago_app/features/organizations/models/company.dart';
+import 'package:vitago_app/features/organizations/models/driver_limits.dart';
 
 abstract interface class OrganizationsRepository {
+  Future<DriverLimits> getDriverLimits(String? companyId);
+  Future<DriverLimits> updateDriverLimits(
+    String? companyId,
+    UpdateDriverLimitsInput input,
+  );
   Future<PaginatedResult<Company>> getCompanies({
     required int page,
     int pageSize,

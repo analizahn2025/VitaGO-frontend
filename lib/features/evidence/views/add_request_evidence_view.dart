@@ -32,7 +32,6 @@ class _AddRequestEvidenceViewState
     extends ConsumerState<AddRequestEvidenceView> {
   final _notes = TextEditingController();
   XFile? _photo;
-  DateTime? _capturedAt;
   DeviceLocation? _location;
   String? _type;
   bool _busy = false;
@@ -154,10 +153,7 @@ class _AddRequestEvidenceViewState
           .read(evidenceCaptureServiceProvider)
           .recoverLostPhoto();
       if (photo != null && mounted) {
-        setState(() {
-          _photo = photo;
-          _capturedAt = DateTime.now();
-        });
+        setState(() => _photo = photo);
       }
     } on Object {
       if (mounted) {
@@ -178,10 +174,7 @@ class _AddRequestEvidenceViewState
         setState(() => _error = 'La imagen no puede superar 10 MB.');
         return;
       }
-      setState(() {
-        _photo = photo;
-        _capturedAt = DateTime.now();
-      });
+      setState(() => _photo = photo);
     } on Object {
       if (mounted) setState(() => _error = 'No fue posible obtener la imagen.');
     }
@@ -234,14 +227,17 @@ class _AddRequestEvidenceViewState
               fileName: _photo!.name,
               latitude: _location!.latitudeText,
               longitude: _location!.longitudeText,
-              capturedAt: _capturedAt ?? DateTime.now(),
               type: _type,
               notes: _notes.text,
             ),
           );
       if (mounted) Navigator.of(context).pop(true);
     } on AppFailure catch (failure) {
-      if (mounted) setState(() => _error = failure.message);
+      if (mounted) {
+        setState(
+          () => _error = failure.fieldMessage('archivo') ?? failure.message,
+        );
+      }
     } finally {
       if (mounted) setState(() => _busy = false);
     }

@@ -11,8 +11,13 @@ import 'package:vitago_app/features/operations/widgets/driver_alerts_button.dart
 import 'package:vitago_app/features/requests/models/request_models.dart';
 import 'package:vitago_app/features/shifts/controllers/shifts_controller.dart';
 
+import 'package:vitago_app/features/notifications/storage/notification_seen_store.dart';
+
+import '../../../support/notification_seen_memory_store.dart';
+
 void main() {
   testWidgets('muestra los avisos operativos del motorista', (tester) async {
+    addTearDown(() => tester.pumpWidget(const SizedBox()));
     final request = ServiceRequestSummary(
       id: 'request-id',
       number: 'SOL-0001',
@@ -66,6 +71,9 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
+          notificationSeenStoreProvider.overrideWithValue(
+            MemoryNotificationSeenStore(),
+          ),
           driverDeliveryControllerProvider.overrideWith(
             (ref) async =>
                 DriverDeliveryBoard(inProgress: [request], history: const []),
@@ -82,12 +90,18 @@ void main() {
           ),
         ],
         child: MaterialApp(
-          home: Scaffold(appBar: AppBar(actions: const [DriverAlertsButton()])),
+          home: Scaffold(
+            appBar: AppBar(
+              actions: const [DriverAlertsButton(ownerKey: 'test-owner')],
+            ),
+          ),
         ),
       ),
     );
     await tester.pumpAndSettle();
 
+    // An active task/warning is still listed, but is not a new notification.
+    expect(tester.widget<Badge>(find.byType(Badge)).isLabelVisible, isFalse);
     await tester.tap(find.byIcon(Icons.notifications_outlined));
     await tester.pumpAndSettle();
 
@@ -100,6 +114,7 @@ void main() {
   testWidgets('mantiene los avisos legibles con texto grande y en paisaje', (
     tester,
   ) async {
+    addTearDown(() => tester.pumpWidget(const SizedBox()));
     addTearDown(() => tester.binding.setSurfaceSize(null));
     await tester.binding.setSurfaceSize(const Size(375, 667));
 
@@ -142,6 +157,9 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
+          notificationSeenStoreProvider.overrideWithValue(
+            MemoryNotificationSeenStore(),
+          ),
           driverDeliveryControllerProvider.overrideWith(
             (ref) async =>
                 const DriverDeliveryBoard(inProgress: [], history: []),
@@ -167,7 +185,11 @@ void main() {
                 .copyWith(textScaler: const TextScaler.linear(1.5)),
             child: child!,
           ),
-          home: Scaffold(appBar: AppBar(actions: const [DriverAlertsButton()])),
+          home: Scaffold(
+            appBar: AppBar(
+              actions: const [DriverAlertsButton(ownerKey: 'test-owner')],
+            ),
+          ),
         ),
       ),
     );

@@ -38,14 +38,29 @@ Identificador Android: `com.vitago.network`.
 
 ### VitaGo Corporate
 
+Backend publicado de pruebas en Render:
+
 ```powershell
-flutter run --flavor corporate -t lib/main_corporate.dart --dart-define=API_BASE_URL=https://corporate-api.example.com/api/v1/
+flutter run --flavor corporate -t lib/main_corporate.dart --dart-define-from-file=config/corporate.render.json
 ```
+
+La URL pública está en `config/corporate.render.json` y utiliza HTTPS. El archivo
+no contiene claves ni contraseñas. Para desarrollo local se puede seguir usando
+`--dart-define=API_BASE_URL=http://IP_DE_LA_COMPUTADORA:8001/api/v1/` en lugar del
+archivo de Render.
+
+Al cambiar el servidor, detener la ejecución anterior con `q` y lanzar el comando
+nuevo. Hot reload y hot restart no cambian los valores `--dart-define` del proceso
+que ya estaba ejecutándose. Para comprobar la conexión desde el teléfono:
+`https://vitago.onrender.com/api/v1/salud/`. Salud no verifica usuarios ni base de
+datos. Al usar otra base puede ser necesario iniciar sesión nuevamente con una
+cuenta existente en ese despliegue.
 
 Identificador Android: `com.vitago.corporate`.
 
-La integración corporativa no solicita credenciales locales. Su proveedor SSO
-se conectará cuando se defina el mecanismo para obtener el JWT corporativo.
+Corporate de pruebas utiliza correo y contraseña con `AUTH_PROVIDER=LOCAL`.
+El proveedor SSO se conectará cuando se defina el mecanismo para obtener el JWT
+corporativo; no se habilita al cambiar la URL.
 
 También existe `lib/main.dart` para herramientas que necesiten elegir el modo
 mediante `--dart-define=APP_MODE=CORPORATE|EXTERNAL`.

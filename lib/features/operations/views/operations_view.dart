@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:vitago_app/features/fleet/widgets/driver_tube_load.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:vitago_app/app/theme/app_design_tokens.dart';
@@ -46,6 +47,7 @@ class _OperationsViewState extends ConsumerState<OperationsView>
   bool _busy = false;
   bool _refreshing = false;
   String? _error;
+  Timer? _cutRefreshTimer;
 
   @override
   void initState() {
@@ -72,6 +74,7 @@ class _OperationsViewState extends ConsumerState<OperationsView>
 
   @override
   void dispose() {
+    _cutRefreshTimer?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
@@ -86,16 +89,19 @@ class _OperationsViewState extends ConsumerState<OperationsView>
       );
     }
 
-    final activeShift = ref.watch(activeShiftControllerProvider);
+    ref.listen(activeShiftDayControllerProvider, (previous, next) {
+      if (next.value case final day?) _scheduleCutRefresh(day);
+    });
+    final activeDay = ref.watch(activeShiftDayControllerProvider);
     final deliveryBoard = ref.watch(driverDeliveryControllerProvider);
     final driverProfile = ref.watch(ownDriverProfileControllerProvider);
-    final content = activeShift.when(
+    final content = activeDay.when(
       loading: () => const AppLoadingView(label: 'Consultando jornada…'),
       error: (error, stackTrace) => AppErrorView(
         error: error,
-        onRetry: () => ref.invalidate(activeShiftControllerProvider),
+        onRetry: () => ref.invalidate(activeShiftDayControllerProvider),
       ),
-      data: (shift) => _buildContent(shift, deliveryBoard, driverProfile),
+      data: (day) => _buildContent(day, deliveryBoard, driverProfile),
     );
     return RequiredGpsBody(
       onReportProblem: widget.profile.can(AppPermissions.createIncidents)
@@ -106,10 +112,11 @@ class _OperationsViewState extends ConsumerState<OperationsView>
   }
 
   Widget _buildContent(
-    DriverShift? shift,
+    ActiveShiftDay day,
     AsyncValue<DriverDeliveryBoard> deliveryBoard,
     AsyncValue<DriverProfile> driverProfile,
   ) {
+    final shift = day.shift;
     final colors = Theme.of(context).colorScheme;
     return RefreshIndicator(
       onRefresh: _refreshDelivery,
@@ -138,8 +145,14 @@ class _OperationsViewState extends ConsumerState<OperationsView>
                 ),
                 const SizedBox(height: AppSpacing.xs),
                 Text(
-                  shift == null
-                      ? 'Todo listo para comenzar tu jornada.'
+                  day.closurePending || day.isAfterCut
+                      ? 'La operación de hoy terminó a las 22:00.'
+                      : shift?.onLunch == true
+                      ? 'Estás en almuerzo. Regresa desde esta jornada cuando estés listo.'
+                      : shift == null
+                      ? day.shiftStartedToday == true
+                            ? 'Tu jornada de hoy ya finalizó.'
+                            : 'Todo listo para comenzar tu jornada.'
                       : 'Jornada activa desde ${AppDateFormat.dateTime(shift.startedAt)}',
                   style: TextStyle(
                     color: shift == null
@@ -151,20 +164,53 @@ class _OperationsViewState extends ConsumerState<OperationsView>
                   const SizedBox(height: AppSpacing.md),
                   StatusBadge(status: shift.status),
                 ],
+                if (day.supportsDailySchedule && !day.isAfterCut) ...[
+                  const SizedBox(height: AppSpacing.sm),
+                  Text(
+                    'Horario de hoy: hasta las 22:00${day.operationalTimeZone == null ? '' : ' · ${day.operationalTimeZone}'}',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: shift == null
+                          ? colors.onSurfaceVariant
+                          : colors.onPrimary,
+                    ),
+                  ),
+                ],
               ],
             ),
           ),
           if (_error case final error?)
             _MessageBand(message: error, isError: true),
+          if (day.supportsDailySchedule &&
+              (day.closurePending ||
+                  day.isAfterCut ||
+                  (shift == null && day.shiftStartedToday == true)))
+            _MessageBand(
+              message: day.closurePending
+                  ? 'El cierre de hoy está pendiente en el servidor. No puedes operar nuevos servicios.'
+                  : day.isAfterCut
+                  ? 'El horario operativo terminó. Vuelve mañana para iniciar una nueva jornada.'
+                  : 'Ya completaste una jornada hoy. Podrás iniciar otra mañana.',
+            ),
+          if (shift == null &&
+              day.canStartShift == false &&
+              day.shiftStartedToday != true &&
+              !day.isAfterCut)
+            const _MessageBand(
+              message: 'No puedes iniciar una jornada en este momento. Revisa tu disponibilidad y motocicleta.',
+            ),
           Padding(
             padding: const EdgeInsets.all(AppSpacing.lg),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
+                if (driverProfile.value case final driver?) ...[
+                  DriverTubeLoad(driver: driver),
+                  const SizedBox(height: AppSpacing.md),
+                ],
                 if (shift == null)
-                  _buildInactiveActions(deliveryBoard, driverProfile)
+                  _buildInactiveActions(day, deliveryBoard, driverProfile)
                 else
-                  _buildActiveActions(shift, deliveryBoard),
+                  _buildActiveActions(day, shift, deliveryBoard, driverProfile),
               ],
             ),
           ),
@@ -174,15 +220,20 @@ class _OperationsViewState extends ConsumerState<OperationsView>
   }
 
   Widget _buildInactiveActions(
+    ActiveShiftDay day,
     AsyncValue<DriverDeliveryBoard> deliveryBoard,
     AsyncValue<DriverProfile> driverProfile,
   ) {
     final vehicle = driverProfile.value?.vehicle;
-    final canStart = driverProfile.hasValue && vehicle?.status == 'ACTIVO';
+    final canStart =
+        driverProfile.hasValue &&
+        vehicle?.status == 'ACTIVO' &&
+        day.canStartShift != false &&
+        !day.isAfterCut;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        if (!canStart) ...[
+        if (driverProfile.hasError || vehicle?.status != 'ACTIVO') ...[
           _MotorcycleReadiness(
             loading: driverProfile.isLoading,
             message: driverProfile.hasError
@@ -220,28 +271,69 @@ class _OperationsViewState extends ConsumerState<OperationsView>
   }
 
   Widget _buildActiveActions(
+    ActiveShiftDay day,
     DriverShift shift,
     AsyncValue<DriverDeliveryBoard> deliveryBoard,
+    AsyncValue<DriverProfile> driverProfile,
   ) {
     final board = deliveryBoard.value;
     final canFinishFromBoard =
         deliveryBoard.hasValue && !(board?.hasActiveAssignments ?? true);
+    final canOperate =
+        shift.isOperational && !day.closurePending && !day.isAfterCut;
+    final canStartLunch =
+        day.supportsDailySchedule &&
+        canOperate &&
+        !shift.onLunch &&
+        driverProfile.value?.operationalStatus == 'AVAILABLE' &&
+        canFinishFromBoard &&
+        widget.profile.can(AppPermissions.updateOwnDriverStatus);
+    final canFinishLunch =
+        day.supportsDailySchedule &&
+        shift.onLunch &&
+        !day.closurePending &&
+        !day.isAfterCut &&
+        widget.profile.can(AppPermissions.updateOwnDriverStatus);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        DriverRouteSection(
-          canCalculate: widget.profile.can(AppPermissions.calculateRoute),
-          onOpenRequest: _openRequest,
-        ),
+        if (shift.onLunch && day.supportsDailySchedule) ...[
+          _MessageBand(
+            message: 'En almuerzo. No recibirás nuevas asignaciones hasta que regreses.',
+          ),
+          const SizedBox(height: AppSpacing.md),
+        ],
+        if (canStartLunch || canFinishLunch) ...[
+          FilledButton.tonalIcon(
+            onPressed: _busy
+                ? null
+                : () => _changeLunch(shift.id, finish: canFinishLunch),
+            icon: Icon(
+              canFinishLunch ? Icons.play_arrow : Icons.lunch_dining_outlined,
+            ),
+            label: Text(
+              canFinishLunch ? 'Regresé del almuerzo' : 'Iniciar almuerzo',
+            ),
+          ),
+          const SizedBox(height: AppSpacing.md),
+        ],
+        if (canOperate)
+          DriverRouteSection(
+            profile: widget.profile,
+            canCalculate: widget.profile.can(AppPermissions.calculateRoute),
+            onOpenRequest: _openRequest,
+          ),
         const SizedBox(height: AppSpacing.lg),
         _buildDriverRequests(deliveryBoard),
         if (widget.profile.can(AppPermissions.registerDriverLocation)) ...[
           const SizedBox(height: AppSpacing.lg),
           _AutomaticTrackingStatus(
             status: ref.watch(driverTrackingStatusProvider),
+            captureEnabled: !day.closurePending && !day.isAfterCut,
           ),
         ],
-        if (widget.profile.can(AppPermissions.createIncidents)) ...[
+        if (canOperate &&
+            widget.profile.can(AppPermissions.createIncidents)) ...[
           const SizedBox(height: AppSpacing.lg),
           OutlinedButton.icon(
             onPressed: _busy ? null : _openCreateIncident,
@@ -249,7 +341,9 @@ class _OperationsViewState extends ConsumerState<OperationsView>
             label: const Text('Reportar un problema'),
           ),
         ],
-        if (widget.profile.can(AppPermissions.finishShift)) ...[
+        if (!day.closurePending &&
+            !day.isAfterCut &&
+            widget.profile.can(AppPermissions.finishShift)) ...[
           const SizedBox(height: AppSpacing.xl),
           if (!canFinishFromBoard) ...[
             _FinishShiftNotice(
@@ -277,10 +371,70 @@ class _OperationsViewState extends ConsumerState<OperationsView>
     );
   }
 
+  void _scheduleCutRefresh(ActiveShiftDay day) {
+    _cutRefreshTimer?.cancel();
+    final serverNow = day.currentServerTime;
+    final cut = day.scheduledCloseAt;
+    if (serverNow == null || cut == null || !serverNow.isBefore(cut)) return;
+    _cutRefreshTimer = Timer(cut.difference(serverNow), () {
+      if (mounted) unawaited(_refreshDelivery());
+    });
+  }
+
+  Future<void> _changeLunch(String shiftId, {required bool finish}) async {
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      final actions = ref.read(shiftActionsControllerProvider);
+      if (finish) {
+        await actions.finishLunch(shiftId);
+      } else {
+        await actions.startLunch(shiftId);
+      }
+      ref.invalidate(activeShiftDayControllerProvider);
+      ref.invalidate(activeShiftControllerProvider);
+      ref.invalidate(ownDriverProfileControllerProvider);
+      ref.invalidate(driverDeliveryControllerProvider);
+      ref.invalidate(myRouteProvider);
+      await ref.read(activeShiftDayControllerProvider.future);
+      try {
+        await Future.wait([
+          ref.read(ownDriverProfileControllerProvider.future),
+          ref.read(driverDeliveryControllerProvider.future),
+        ]);
+      } on Object {
+        if (mounted) {
+          setState(
+            () => _error = 'El almuerzo se actualizó. Desliza hacia abajo para volver a cargar tus servicios.',
+          );
+        }
+      }
+      try {
+        await ref.read(myRouteProvider.future);
+      } on Object {
+        // La jornada se actualizó; la ruta puede estar temporalmente inactiva.
+      }
+    } on AppFailure catch (failure) {
+      if (mounted) {
+        setState(
+          () => _error =
+              failure.fieldMessage('almuerzo', 'jornada') ??
+              failure.fieldMessage('estado_operativo') ??
+              failure.message,
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
   Future<void> _refreshDelivery() async {
     if (_refreshing) return;
     _refreshing = true;
     ref.invalidate(activeShiftControllerProvider);
+    ref.invalidate(activeShiftDayControllerProvider);
     ref.invalidate(driverDeliveryControllerProvider);
     ref.invalidate(ownDriverProfileControllerProvider);
     ref.invalidate(driverNotificationsControllerProvider);
@@ -289,9 +443,12 @@ class _OperationsViewState extends ConsumerState<OperationsView>
     try {
       await Future.wait([
         ref.read(activeShiftControllerProvider.future),
+        ref.read(activeShiftDayControllerProvider.future),
         ref.read(driverDeliveryControllerProvider.future),
         ref.read(ownDriverProfileControllerProvider.future),
       ]);
+    } on Object {
+      // Los providers muestran el error y conservan su opción de reintento.
     } finally {
       _refreshing = false;
     }
@@ -304,6 +461,7 @@ class _OperationsViewState extends ConsumerState<OperationsView>
     );
     ref.invalidate(driverDeliveryControllerProvider);
     ref.invalidate(activeShiftControllerProvider);
+    ref.invalidate(activeShiftDayControllerProvider);
     ref.invalidate(driverNotificationsControllerProvider);
     ref.invalidate(unreadNotificationCountControllerProvider);
     ref.invalidate(myRouteProvider);
@@ -317,6 +475,9 @@ class _OperationsViewState extends ConsumerState<OperationsView>
       _error = null;
     });
     try {
+      final configuration = await _trackingConfiguration(
+        requireOfficialTime: true,
+      );
       final location = await ref
           .read(deviceLocationServiceProvider)
           .getCurrentLocation();
@@ -328,7 +489,6 @@ class _OperationsViewState extends ConsumerState<OperationsView>
               longitude: location.longitudeText,
             ),
           );
-      final configuration = await _trackingConfiguration();
       final coordinator = ref.read(trackingQueueCoordinatorProvider);
       await coordinator.capture(started.id, location);
       try {
@@ -345,6 +505,7 @@ class _OperationsViewState extends ConsumerState<OperationsView>
         }
       }
       ref.invalidate(activeShiftControllerProvider);
+      ref.invalidate(activeShiftDayControllerProvider);
       ref.invalidate(driverDeliveryControllerProvider);
       ref.invalidate(ownDriverProfileControllerProvider);
     } on AppFailure catch (failure) {
@@ -438,6 +599,7 @@ class _OperationsViewState extends ConsumerState<OperationsView>
         await coordinator.clearShift(shiftId);
       }
       ref.invalidate(activeShiftControllerProvider);
+      ref.invalidate(activeShiftDayControllerProvider);
       ref.invalidate(driverDeliveryControllerProvider);
       ref.invalidate(ownDriverProfileControllerProvider);
       if (mounted) {
@@ -454,10 +616,33 @@ class _OperationsViewState extends ConsumerState<OperationsView>
     }
   }
 
-  Future<TrackingConfiguration> _trackingConfiguration() async {
+  Future<TrackingConfiguration> _trackingConfiguration({
+    bool requireOfficialTime = false,
+  }) async {
     try {
-      return await ref.read(trackingConfigurationProvider.future);
+      final configuration = await (requireOfficialTime
+          ? ref.refresh(trackingConfigurationProvider.future)
+          : ref.read(trackingConfigurationProvider.future));
+      if (requireOfficialTime &&
+          !ref.read(serverTimeClockProvider).isSynchronized) {
+        throw const AppFailure(
+          message: 'No fue posible sincronizar la hora oficial del GPS.',
+        );
+      }
+      return configuration;
+    } on AppFailure {
+      if (requireOfficialTime ||
+          !ref.read(serverTimeClockProvider).isSynchronized) {
+        rethrow;
+      }
+      return TrackingConfiguration.defaults;
     } on Object {
+      if (requireOfficialTime ||
+          !ref.read(serverTimeClockProvider).isSynchronized) {
+        throw const AppFailure(
+          message: 'Conecta el teléfono para sincronizar la hora oficial antes de iniciar la jornada.',
+        );
+      }
       return TrackingConfiguration.defaults;
     }
   }
@@ -467,13 +652,18 @@ class _OperationsViewState extends ConsumerState<OperationsView>
       MaterialPageRoute<bool>(builder: (context) => const CreateIncidentView()),
     );
     ref.invalidate(activeShiftControllerProvider);
+    ref.invalidate(activeShiftDayControllerProvider);
   }
 }
 
 class _AutomaticTrackingStatus extends StatelessWidget {
-  const _AutomaticTrackingStatus({required this.status});
+  const _AutomaticTrackingStatus({
+    required this.status,
+    required this.captureEnabled,
+  });
 
   final DriverTrackingStatus status;
+  final bool captureEnabled;
 
   @override
   Widget build(BuildContext context) {
@@ -500,13 +690,17 @@ class _AutomaticTrackingStatus extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'GPS conectado',
+                    captureEnabled
+                        ? 'GPS conectado'
+                        : 'GPS pendiente de sincronizar',
                     style: Theme.of(context).textTheme.titleMedium,
                   ),
                   const SizedBox(height: AppSpacing.xxs),
                   Text(
                     status.error != null
                         ? status.error!
+                        : !captureEnabled && status.pendingPoints == 0
+                        ? 'No se registran nuevos puntos después del cierre.'
                         : status.pendingPoints > 0
                         ? '${status.pendingPoints} punto${status.pendingPoints == 1 ? '' : 's'} pendiente${status.pendingPoints == 1 ? '' : 's'} de envío.'
                         : status.lastSyncedAt == null

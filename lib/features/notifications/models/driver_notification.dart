@@ -63,7 +63,11 @@ class DriverNotification {
       isRead: _boolValue(json['leida'] ?? json['leido']),
       isImportant:
           _boolValue(json['importante']) ||
-          type.toUpperCase().contains('PRIORIT'),
+          type.toUpperCase().contains('PRIORIT') ||
+          const {
+            'REASIGNACION_PENDIENTE',
+            'SERVICIO_NO_ENTREGADO',
+          }.contains(type.toUpperCase()),
       createdAt: optionalDateTime(json, 'creado_en'),
       readAt: optionalDateTime(json, 'leida_en'),
     );
@@ -92,6 +96,10 @@ class DriverNotification {
   static String _titleFor(String type) {
     return switch (type.toUpperCase()) {
       'SOLICITUD_ASIGNADA' || 'ASIGNACION' => 'Servicio asignado',
+      'SOLICITUD_REASIGNADA' => 'Servicio reasignado',
+      'REASIGNACION_PENDIENTE' => 'Pendiente de reasignación',
+      'SERVICIO_NO_ENTREGADO' => 'Servicio no entregado',
+      'SOLICITUD_RETIRADA' => 'Servicio retirado',
       'SOLICITUD_PRIORITARIA' => 'Servicio prioritario',
       'SOLICITUD_ACTUALIZADA' => 'Servicio actualizado',
       _ => 'Actualización de VitaGo',

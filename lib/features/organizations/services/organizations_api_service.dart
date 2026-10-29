@@ -4,11 +4,52 @@ import 'package:vitago_app/core/models/paginated_result.dart';
 import 'package:vitago_app/core/network/api_client.dart';
 import 'package:vitago_app/features/organizations/models/branch.dart';
 import 'package:vitago_app/features/organizations/models/company.dart';
+import 'package:vitago_app/features/organizations/models/driver_limits.dart';
 
 class OrganizationsApiService {
   const OrganizationsApiService(this._apiClient);
 
   final ApiClient _apiClient;
+
+  String _limitsPath(String? companyId) => companyId == null
+      ? 'organizaciones/configuracion/limites-motoristas/'
+      : 'organizaciones/empresas/$companyId/limites-motoristas/';
+  Future<DriverLimits> getDriverLimits(String? companyId) async {
+    try {
+      final response = await _apiClient.get<Map<String, dynamic>>(
+        _limitsPath(companyId),
+      );
+      return DriverLimits.fromJson(_requiredData(response.data));
+    } on DioException catch (error) {
+      throw AppFailure.fromDio(error);
+    } on FormatException {
+      throw const AppFailure(
+        message: 'La configuración de cupos no tiene el formato esperado.',
+      );
+    }
+  }
+
+  Future<DriverLimits> updateDriverLimits(
+    String? companyId,
+    UpdateDriverLimitsInput input,
+  ) async {
+    if (input.tubeLimit == null && input.requestLimit == null) {
+      throw const AppFailure(message: 'Cambia al menos un límite.');
+    }
+    try {
+      final response = await _apiClient.patch<Map<String, dynamic>>(
+        _limitsPath(companyId),
+        data: input.toJson(),
+      );
+      return DriverLimits.fromJson(_requiredData(response.data));
+    } on DioException catch (error) {
+      throw AppFailure.fromDio(error);
+    } on FormatException {
+      throw const AppFailure(
+        message: 'La configuración actualizada no tiene el formato esperado.',
+      );
+    }
+  }
 
   Future<PaginatedResult<Company>> getCompanies({
     required int page,

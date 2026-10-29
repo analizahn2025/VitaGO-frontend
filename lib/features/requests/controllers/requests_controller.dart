@@ -46,6 +46,12 @@ class RequestActionsController {
   Future<ServiceRequestDetail> create(CreateServiceRequestInput input) =>
       _repository.createRequest(input);
 
+  Future<ServiceRequestDetail> updateTubeCount(
+    String requestId,
+    int count,
+    String reason,
+  ) => _repository.updateTubeCount(requestId, count, reason);
+
   Future<ServiceRequestDetail> assign(
     String requestId,
     RequestAssignmentInput input,

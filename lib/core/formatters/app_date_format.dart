@@ -1,8 +1,13 @@
+import 'package:timezone/data/latest.dart' as timezone_data;
+import 'package:timezone/timezone.dart' as timezone;
+
 abstract final class AppDateFormat {
-  static String dateTime(DateTime value) {
-    final local = value.toLocal();
-    return '${_two(local.day)}/${_two(local.month)}/${local.year} '
-        '${_two(local.hour)}:${_two(local.minute)}';
+  static bool _timeZonesInitialized = false;
+
+  static String dateTime(DateTime value, {String? timeZone}) {
+    final displayed = _inTimeZone(value, timeZone);
+    return '${_two(displayed.day)}/${_two(displayed.month)}/${displayed.year} '
+        '${_two(displayed.hour)}:${_two(displayed.minute)}';
   }
 
   static String durationMinutes(int minutes) {
@@ -14,4 +19,20 @@ abstract final class AppDateFormat {
   }
 
   static String _two(int value) => value.toString().padLeft(2, '0');
+
+  static DateTime _inTimeZone(DateTime value, String? timeZone) {
+    if (timeZone == null || timeZone.trim().isEmpty) return value.toLocal();
+    if (!_timeZonesInitialized) {
+      timezone_data.initializeTimeZones();
+      _timeZonesInitialized = true;
+    }
+    try {
+      return timezone.TZDateTime.from(
+        value.toUtc(),
+        timezone.getLocation(timeZone),
+      );
+    } on timezone.LocationNotFoundException {
+      return value.toLocal();
+    }
+  }
 }

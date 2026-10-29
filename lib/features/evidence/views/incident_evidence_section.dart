@@ -45,7 +45,9 @@ class IncidentEvidenceSection extends ConsumerWidget {
                   contentPadding: EdgeInsets.zero,
                   leading: const Icon(Icons.image_outlined),
                   title: Text(item.notes ?? 'Evidencia fotográfica'),
-                  subtitle: Text(AppDateFormat.dateTime(item.capturedAt)),
+                  subtitle: Text(
+                    'Registrada · ${AppDateFormat.dateTime(item.capturedAt)}',
+                  ),
                   trailing: item.fileAvailable
                       ? const Icon(Icons.open_in_new)
                       : const Icon(Icons.hide_image_outlined),

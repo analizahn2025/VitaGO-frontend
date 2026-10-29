@@ -68,6 +68,10 @@ class ServiceRequestSummary {
     this.destination,
     this.specialDestination,
     this.specialKilometers,
+    this.closedAt,
+    this.closureReason,
+    this.pendingReassignment = false,
+    this.tubeCount,
   });
 
   factory ServiceRequestSummary.fromJson(Map<String, dynamic> json) {
@@ -78,6 +82,7 @@ class ServiceRequestSummary {
       companyId: requireString(json, 'empresa_id'),
       branchId: optionalString(json, 'sucursal_id'),
       requestedById: requireString(json, 'solicitada_por_id'),
+      tubeCount: nullableInt(json, 'cantidad_tubos'),
       assignedDriverId: optionalString(json, 'repartidor_asignado_id'),
       priority: requireString(json, 'prioridad'),
       modality: requireString(json, 'modalidad'),
@@ -91,6 +96,9 @@ class ServiceRequestSummary {
       specialDestination: optionalString(json, 'destino_especial'),
       routePresentation: requireString(json, 'presentacion_ruta'),
       specialKilometers: optionalString(json, 'kilometros_envio_especial'),
+      pendingReassignment: optionalBool(json, 'reasignacion_pendiente'),
+      closedAt: optionalDateTime(json, 'cerrada_en'),
+      closureReason: optionalString(json, 'motivo_cierre'),
       status: requireString(json, 'estado'),
       createdAt: requireDateTime(json, 'creado_en'),
     );
@@ -101,6 +109,7 @@ class ServiceRequestSummary {
   final String companyId;
   final String? branchId;
   final String requestedById;
+  final int? tubeCount;
   final String? assignedDriverId;
   final String priority;
   final String modality;
@@ -110,6 +119,9 @@ class ServiceRequestSummary {
   final String? specialDestination;
   final String routePresentation;
   final String? specialKilometers;
+  final bool pendingReassignment;
+  final DateTime? closedAt;
+  final String? closureReason;
   final String status;
   final DateTime createdAt;
 
@@ -118,6 +130,9 @@ class ServiceRequestSummary {
   bool get isTerminal => requestTerminalStates.contains(status.toUpperCase());
   String get destinationName =>
       destination?.name ?? specialDestination ?? 'Destino no informado';
+  bool get closedAtEndOfDay => closureReason?.toUpperCase() == 'FIN_DIA';
+  String get displayStatusLabel =>
+      requestStatusLabel(status, closedAtEndOfDay: closedAtEndOfDay);
 }
 
 class ServiceRequestDetail {
@@ -135,10 +150,15 @@ class ServiceRequestDetail {
     this.deliveredAt,
     this.cancelledAt,
     this.specialMovement,
+    this.specialMovements = const [],
   });
 
   factory ServiceRequestDetail.fromJson(Map<String, dynamic> json) {
     final movementJson = optionalJsonMap(json, 'movimiento_especial');
+    final specialMovementsJson = json['movimientos_especiales'];
+    final specialMovement = movementJson == null
+        ? null
+        : SpecialRequestMovement.fromJson(movementJson);
     return ServiceRequestDetail(
       summary: ServiceRequestSummary.fromJson(json),
       notes: optionalString(json, 'notas'),
@@ -160,9 +180,15 @@ class ServiceRequestDetail {
       arrivedDestinationAt: optionalDateTime(json, 'llegada_destino_en'),
       deliveredAt: optionalDateTime(json, 'entregada_en'),
       cancelledAt: optionalDateTime(json, 'cancelada_en'),
-      specialMovement: movementJson == null
-          ? null
-          : SpecialRequestMovement.fromJson(movementJson),
+      specialMovement: specialMovement,
+      specialMovements: specialMovementsJson is List
+          ? jsonMapList(
+              specialMovementsJson,
+              'movimientos_especiales',
+            ).map(SpecialRequestMovement.fromJson).toList(growable: false)
+          : specialMovement == null
+          ? const []
+          : [specialMovement],
       updatedAt: requireDateTime(json, 'actualizado_en'),
     );
   }
@@ -179,6 +205,7 @@ class ServiceRequestDetail {
   final DateTime? deliveredAt;
   final DateTime? cancelledAt;
   final SpecialRequestMovement? specialMovement;
+  final List<SpecialRequestMovement> specialMovements;
   final DateTime updatedAt;
 
   String get id => summary.id;
@@ -206,6 +233,7 @@ class SpecialRequestMovement {
     this.endLongitude,
     this.traveledKilometers,
     this.mileageQuality,
+    this.closureReason,
   });
 
   factory SpecialRequestMovement.fromJson(Map<String, dynamic> json) {
@@ -222,6 +250,7 @@ class SpecialRequestMovement {
       endLatitude: optionalString(json, 'latitud_fin'),
       endLongitude: optionalString(json, 'longitud_fin'),
       traveledKilometers: optionalString(json, 'kilometros_recorridos'),
+      closureReason: optionalString(json, 'motivo_cierre'),
       recordsConsidered: optionalInt(json, 'registros_considerados'),
       recordsDiscarded: optionalInt(json, 'registros_descartados'),
       mileageQuality: mileageQuality == null || mileageQuality.isEmpty
@@ -241,6 +270,7 @@ class SpecialRequestMovement {
   final String? endLatitude;
   final String? endLongitude;
   final String? traveledKilometers;
+  final String? closureReason;
   final int recordsConsidered;
   final int recordsDiscarded;
   final MileageQuality? mileageQuality;
@@ -395,20 +425,27 @@ String requestModalityLabel(String modality) =>
       _ => modality.replaceAll('_', ' ').toLowerCase(),
     };
 
-String requestStatusLabel(String status) => switch (status.toUpperCase()) {
-  'PENDING' => 'Pendiente',
-  'ASSIGNED' => 'Asignada',
-  'GOING_TO_PICKUP' => 'Hacia recolección',
-  'AT_PICKUP' => 'En recolección',
-  'PICKED_UP' => 'Recolectada',
-  'IN_TRANSIT' => 'En tránsito',
-  'AT_DESTINATION' => 'En destino',
-  'DELIVERED' => 'Entregada',
-  'CANCELLED' => 'Cancelada',
-  'PICKUP_FAILED' => 'Recolección fallida',
-  'DELIVERY_FAILED' => 'Entrega fallida',
-  _ => status.replaceAll('_', ' ').toLowerCase(),
-};
+String requestStatusLabel(String status, {bool closedAtEndOfDay = false}) {
+  final normalized = status.toUpperCase();
+  if (closedAtEndOfDay) {
+    if (normalized == 'PICKUP_FAILED') return 'Recolección no realizada';
+    if (normalized == 'DELIVERY_FAILED') return 'No entregado';
+  }
+  return switch (normalized) {
+    'PENDING' => 'Pendiente',
+    'ASSIGNED' => 'Asignada',
+    'GOING_TO_PICKUP' => 'Hacia recolección',
+    'AT_PICKUP' => 'En recolección',
+    'PICKED_UP' => 'Recolectada',
+    'IN_TRANSIT' => 'En tránsito',
+    'AT_DESTINATION' => 'En destino',
+    'DELIVERED' => 'Entregada',
+    'CANCELLED' => 'Cancelada',
+    'PICKUP_FAILED' => 'Recolección fallida',
+    'DELIVERY_FAILED' => 'Entrega fallida',
+    _ => status.replaceAll('_', ' ').toLowerCase(),
+  };
+}
 
 String? requestNextOperationalStatus(String status) =>
     switch (status.toUpperCase()) {
@@ -420,6 +457,27 @@ String? requestNextOperationalStatus(String status) =>
       'AT_DESTINATION' => 'DELIVERED',
       _ => null,
     };
+
+/// Arrival transitions belong to the server GPS detector (contract 0.32).
+/// Only an unlocated special destination retains a manual arrival action.
+bool requestAllowsManualTransition(
+  ServiceRequestDetail request,
+  String target,
+) {
+  if (target == 'AT_PICKUP') return false;
+  if (target != 'AT_DESTINATION') return true;
+  final point = request.summary.destination;
+  final latitude = double.tryParse(point?.latitude ?? '');
+  final longitude = double.tryParse(point?.longitude ?? '');
+  final hasCoordinates =
+      latitude != null &&
+      latitude.isFinite &&
+      latitude.abs() <= 90 &&
+      longitude != null &&
+      longitude.isFinite &&
+      longitude.abs() <= 180;
+  return request.isSpecial && !hasCoordinates;
+}
 
 String requestTransitionActionLabel(String targetStatus) =>
     switch (targetStatus.toUpperCase()) {

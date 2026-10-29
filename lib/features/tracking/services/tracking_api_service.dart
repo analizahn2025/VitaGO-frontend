@@ -1,6 +1,7 @@
 import 'package:dio/dio.dart';
 import 'package:vitago_app/core/errors/app_failure.dart';
 import 'package:vitago_app/core/network/api_client.dart';
+import 'package:vitago_app/core/network/api_failure_diagnostics.dart';
 import 'package:vitago_app/features/tracking/models/tracking_point.dart';
 import 'package:vitago_app/features/tracking/models/tracking_configuration.dart';
 
@@ -25,13 +26,19 @@ class TrackingApiService {
   }
 
   Future<TrackingBatchResult> registerPoints(TrackingBatchInput input) async {
+    final payload = input.toJson();
     try {
       final response = await _apiClient.post<Map<String, dynamic>>(
         'seguimiento/registros/',
-        data: input.toJson(),
+        data: payload,
       );
       return TrackingBatchResult.fromJson(_requiredData(response.data));
     } on DioException catch (error) {
+      ApiFailureDiagnostics.logDioExchange(
+        operation: 'gps tracking upload',
+        error: error,
+        payload: payload,
+      );
       throw AppFailure.fromDio(error);
     } on FormatException {
       throw const AppFailure(

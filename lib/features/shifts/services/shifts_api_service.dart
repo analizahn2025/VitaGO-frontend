@@ -1,6 +1,5 @@
 import 'package:dio/dio.dart';
 import 'package:vitago_app/core/errors/app_failure.dart';
-import 'package:vitago_app/core/models/json_readers.dart';
 import 'package:vitago_app/core/models/paginated_result.dart';
 import 'package:vitago_app/core/network/api_client.dart';
 import 'package:vitago_app/features/shifts/models/driver_shift.dart';
@@ -28,18 +27,42 @@ class ShiftsApiService {
   }
 
   Future<DriverShift?> getActiveShift() async {
+    return (await getActiveShiftDay()).shift;
+  }
+
+  Future<ActiveShiftDay> getActiveShiftDay() async {
     try {
       final response = await _apiClient.get<Map<String, dynamic>>(
         'jornadas/activa/',
       );
-      final data = _requiredData(response.data);
-      final shift = optionalJsonMap(data, 'jornada');
-      return shift == null ? null : DriverShift.fromJson(shift);
+      return ActiveShiftDay.fromJson(_requiredData(response.data));
     } on DioException catch (error) {
       throw AppFailure.fromDio(error);
     } on FormatException {
       throw const AppFailure(
         message: 'La jornada activa no tiene el formato esperado.',
+      );
+    }
+  }
+
+  Future<DriverShift> startLunch(String shiftId) =>
+      _lunchAction(shiftId, 'iniciar');
+
+  Future<DriverShift> finishLunch(String shiftId) =>
+      _lunchAction(shiftId, 'finalizar');
+
+  Future<DriverShift> _lunchAction(String shiftId, String action) async {
+    try {
+      final response = await _apiClient.post<Map<String, dynamic>>(
+        'jornadas/$shiftId/almuerzo/$action/',
+        data: <String, dynamic>{},
+      );
+      return DriverShift.fromJson(_requiredData(response.data));
+    } on DioException catch (error) {
+      throw AppFailure.fromDio(error);
+    } on FormatException {
+      throw const AppFailure(
+        message: 'El almuerzo no tiene el formato esperado.',
       );
     }
   }

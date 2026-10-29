@@ -7,6 +7,8 @@ LatLng? routeLocationPosition(RouteLocation? location) {
   final longitude = double.tryParse(location.longitude);
   if (latitude == null ||
       longitude == null ||
+      !latitude.isFinite ||
+      !longitude.isFinite ||
       latitude < -90 ||
       latitude > 90 ||
       longitude < -180 ||
@@ -16,9 +18,46 @@ LatLng? routeLocationPosition(RouteLocation? location) {
   return LatLng(latitude, longitude);
 }
 
-List<LatLng> routePolylinePoints(DriverRoute route) {
-  if (!route.map.showRoute) return const [];
-  final encoded = route.roadRoute.encodedPolyline;
+List<LatLng> routePolylinePoints(
+  DriverRoute route, {
+  RoadRoute? roadRoute,
+  bool? showRoute,
+}) {
+  if (!route.map.showMap || !(showRoute ?? route.map.showRoute)) {
+    return const [];
+  }
+  final road = roadRoute ?? route.roadRoute;
+  if (road.status != 'CALCULADA' ||
+      !road.breakdownAvailable ||
+      road.visualizationMode != 'UN_TRAMO') {
+    return const [];
+  }
+  // A valid suffix may reuse geometry from an older calculatedVersion.
+  if (route.currentVersion != null &&
+      road.currentVersion != null &&
+      road.currentVersion != route.currentVersion) {
+    return const [];
+  }
+  final flow = route.flow;
+  if (flow?.isAutomatic != true) return const [];
+  final selectedId = flow?.segmentId;
+  if (selectedId == null) return const [];
+  final segment = road.segments
+      .where((entry) => entry.id == selectedId)
+      .firstOrNull;
+  if (segment == null || segment.withoutMovement) return const [];
+  if (segment.requestId != flow?.requestId ||
+      segment.stopType != flow?.stopType) {
+    return const [];
+  }
+  if (!route.stops.any(
+    (stop) =>
+        stop.requestId == segment.requestId && stop.type == segment.stopType,
+  )) {
+    return const [];
+  }
+  // The global polyline is compatibility data, never a fallback for missing legs.
+  final encoded = segment.encodedPolyline;
   if (encoded == null || encoded.isEmpty) return const [];
   try {
     return decodeEncodedPolyline(encoded);
@@ -44,6 +83,12 @@ List<LatLng> decodeEncodedPolyline(String encoded) {
     final longitudeValue = _decodeValue(encoded, index);
     index = longitudeValue.nextIndex;
     longitude += longitudeValue.delta;
+
+    if (latitude.abs() > 9000000 || longitude.abs() > 18000000) {
+      throw const FormatException(
+        'La polilínea contiene coordenadas inválidas.',
+      );
+    }
 
     points.add(LatLng(latitude / 1e5, longitude / 1e5));
   }

@@ -12,6 +12,10 @@ final authControllerProvider = AsyncNotifierProvider<AuthController, AuthState>(
 
 class AuthController extends AsyncNotifier<AuthState> {
   StreamSubscription<void>? _sessionExpiredSubscription;
+  Timer? _loginRetryTimer;
+  Stopwatch? _loginRetryStopwatch;
+  int? _loginRetryTotalSeconds;
+  String? _loginRateLimitMessage;
 
   @override
   Future<AuthState> build() async {
@@ -24,7 +28,10 @@ class AuthController extends AsyncNotifier<AuthState> {
     _sessionExpiredSubscription = repository.sessionExpired.listen((_) {
       state = const AsyncData(AuthState.unauthenticated());
     });
-    ref.onDispose(() => _sessionExpiredSubscription?.cancel());
+    ref.onDispose(() {
+      _sessionExpiredSubscription?.cancel();
+      _loginRetryTimer?.cancel();
+    });
 
     final session = await repository.restoreSession();
     if (session == null) {
@@ -39,13 +46,33 @@ class AuthController extends AsyncNotifier<AuthState> {
       return;
     }
 
+    final retryAfterSeconds = _remainingLoginRetrySeconds;
+    if (retryAfterSeconds > 0) {
+      state = AsyncData(
+        AuthState.unauthenticated(
+          message: _loginRateLimitMessage,
+          loginRetryAfterSeconds: retryAfterSeconds,
+        ),
+      );
+      return;
+    }
+
     state = const AsyncData(AuthState.unauthenticated(isProcessing: true));
     try {
       final session = await ref
           .read(authRepositoryProvider)
           .login(email: email.trim(), password: password);
+      _clearLoginRetryCountdown();
       state = AsyncData(AuthState.authenticated(session));
     } on AppFailure catch (failure) {
+      final seconds = failure.retryAfterSeconds;
+      if (failure.isRateLimited && seconds != null && seconds > 0) {
+        _startLoginRetryCountdown(
+          seconds: seconds,
+          message: failure.message,
+        );
+        return;
+      }
       state = AsyncData(
         AuthState.unauthenticated(
           message: failure.message,
@@ -57,6 +84,63 @@ class AuthController extends AsyncNotifier<AuthState> {
         AuthState.unauthenticated(message: 'No fue posible iniciar sesión.'),
       );
     }
+  }
+
+  int get _remainingLoginRetrySeconds {
+    final stopwatch = _loginRetryStopwatch;
+    final totalSeconds = _loginRetryTotalSeconds;
+    if (stopwatch == null || totalSeconds == null) {
+      return 0;
+    }
+
+    final remainingMilliseconds =
+        (totalSeconds * Duration.millisecondsPerSecond) -
+        stopwatch.elapsedMilliseconds;
+    if (remainingMilliseconds <= 0) {
+      return 0;
+    }
+    return (remainingMilliseconds + Duration.millisecondsPerSecond - 1) ~/
+        Duration.millisecondsPerSecond;
+  }
+
+  void _startLoginRetryCountdown({
+    required int seconds,
+    required String message,
+  }) {
+    _loginRetryTimer?.cancel();
+    _loginRetryTotalSeconds = seconds;
+    _loginRateLimitMessage = message;
+    _loginRetryStopwatch = Stopwatch()..start();
+    _emitLoginRetryState();
+    _loginRetryTimer = Timer.periodic(
+      const Duration(seconds: 1),
+      (_) => _emitLoginRetryState(),
+    );
+  }
+
+  void _emitLoginRetryState() {
+    final remainingSeconds = _remainingLoginRetrySeconds;
+    if (remainingSeconds <= 0) {
+      _clearLoginRetryCountdown();
+      state = const AsyncData(AuthState.unauthenticated());
+      return;
+    }
+
+    state = AsyncData(
+      AuthState.unauthenticated(
+        message: _loginRateLimitMessage,
+        loginRetryAfterSeconds: remainingSeconds,
+      ),
+    );
+  }
+
+  void _clearLoginRetryCountdown() {
+    _loginRetryTimer?.cancel();
+    _loginRetryTimer = null;
+    _loginRetryStopwatch?.stop();
+    _loginRetryStopwatch = null;
+    _loginRetryTotalSeconds = null;
+    _loginRateLimitMessage = null;
   }
 
   Future<void> logout() => _closeSession(closeAll: false);

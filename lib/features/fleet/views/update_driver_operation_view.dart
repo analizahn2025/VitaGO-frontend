@@ -64,6 +64,12 @@ class _UpdateDriverOperationViewState
               const Text(
                 'Actualiza únicamente la disponibilidad real del motorista.',
               ),
+              if (widget.driver.onLunch) ...[
+                const SizedBox(height: AppSpacing.sm),
+                const Text(
+                  'Solo el motorista puede regresar del almuerzo desde su jornada.',
+                ),
+              ],
               if (_error case final error?) ...[
                 const SizedBox(height: AppSpacing.md),
                 Text(
@@ -79,18 +85,26 @@ class _UpdateDriverOperationViewState
                   decoration: const InputDecoration(
                     labelText: 'Estado operativo',
                   ),
-                  items: const [
-                    DropdownMenuItem(
+                  items: [
+                    const DropdownMenuItem(
                       value: 'OFFLINE',
                       child: Text('Desconectado'),
                     ),
                     DropdownMenuItem(
                       value: 'AVAILABLE',
-                      child: Text('Disponible'),
+                      enabled: !widget.driver.onLunch,
+                      child: const Text('Disponible'),
                     ),
-                    DropdownMenuItem(value: 'ON_ROUTE', child: Text('En ruta')),
-                    DropdownMenuItem(value: 'PAUSED', child: Text('En pausa')),
                     DropdownMenuItem(
+                      value: 'ON_ROUTE',
+                      enabled: !widget.driver.onLunch,
+                      child: const Text('En ruta'),
+                    ),
+                    const DropdownMenuItem(
+                      value: 'PAUSED',
+                      child: Text('En pausa'),
+                    ),
+                    const DropdownMenuItem(
                       value: 'OUT_OF_SERVICE',
                       child: Text('Fuera de servicio'),
                     ),
@@ -161,7 +175,12 @@ class _UpdateDriverOperationViewState
           );
       if (mounted) Navigator.of(context).pop(true);
     } on AppFailure catch (failure) {
-      if (mounted) setState(() => _error = failure.message);
+      if (mounted) {
+        setState(
+          () => _error =
+              failure.fieldMessage('estado_operativo') ?? failure.message,
+        );
+      }
     } finally {
       if (mounted) setState(() => _saving = false);
     }

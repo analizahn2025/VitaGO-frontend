@@ -133,7 +133,6 @@ class _CreateIncidentViewState extends ConsumerState<CreateIncidentView> {
               description: _description.text,
               latitude: _location?.latitudeText,
               longitude: _location?.longitudeText,
-              reportedAt: DateTime.now(),
             ),
           );
       if (mounted) Navigator.of(context).pop(true);

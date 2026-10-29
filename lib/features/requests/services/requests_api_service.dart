@@ -1,4 +1,5 @@
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 import 'package:vitago_app/core/errors/app_failure.dart';
 import 'package:vitago_app/core/models/json_readers.dart';
 import 'package:vitago_app/core/models/paginated_result.dart';
@@ -59,7 +60,17 @@ class RequestsApiService {
         'solicitudes/resumen-solicitante/',
         queryParameters: query.toQueryParameters(),
       );
-      return RequesterSummary.fromJson(_requiredData(response.data));
+      final summary = RequesterSummary.fromJson(_requiredData(response.data));
+      if (kDebugMode) {
+        debugPrint(
+          '[VitaGo] resumen-inicio: url=${response.realUri} '
+          'status=${response.statusCode} total=${summary.total} '
+          'entregadas_del_dia=${summary.deliveredToday} '
+          'fecha_operativa=${summary.operationalDate} '
+          'entregas_recientes_del_dia=${summary.recentDeliveredToday.length}',
+        );
+      }
+      return summary;
     } on DioException catch (error) {
       throw AppFailure.fromDio(error);
     } on FormatException {
@@ -138,6 +149,26 @@ class RequestsApiService {
     } on FormatException {
       throw const AppFailure(
         message: 'La asignación no tiene el formato esperado.',
+      );
+    }
+  }
+
+  Future<ServiceRequestDetail> updateTubeCount(
+    String requestId,
+    int count,
+    String reason,
+  ) async {
+    try {
+      final response = await _apiClient.patch<Map<String, dynamic>>(
+        'solicitudes/$requestId/cantidad-tubos/',
+        data: {'cantidad_tubos': count, 'motivo': reason.trim()},
+      );
+      return ServiceRequestDetail.fromJson(_requiredData(response.data));
+    } on DioException catch (error) {
+      throw AppFailure.fromDio(error);
+    } on FormatException {
+      throw const AppFailure(
+        message: 'La solicitud actualizada no tiene el formato esperado.',
       );
     }
   }

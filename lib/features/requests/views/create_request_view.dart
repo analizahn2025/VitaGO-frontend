@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:vitago_app/app/config/app_config.dart';
 import 'package:vitago_app/app/theme/app_design_tokens.dart';
 import 'package:vitago_app/core/errors/app_failure.dart';
+import 'package:vitago_app/core/validation/operational_values.dart';
 import 'package:vitago_app/core/permissions/app_permissions.dart';
 import 'package:vitago_app/core/widgets/adaptive_form_row.dart';
 import 'package:vitago_app/core/widgets/async_state_view.dart';
@@ -28,6 +29,7 @@ class CreateRequestView extends ConsumerStatefulWidget {
 class _CreateRequestViewState extends ConsumerState<CreateRequestView> {
   final _formKey = GlobalKey<FormState>();
   final _notes = TextEditingController();
+  final _tubeCount = TextEditingController();
   final _specialDestination = TextEditingController();
   final List<_ArticleDraft> _articles = [_ArticleDraft()];
   String? _companyId;
@@ -44,6 +46,7 @@ class _CreateRequestViewState extends ConsumerState<CreateRequestView> {
   @override
   void dispose() {
     _notes.dispose();
+    _tubeCount.dispose();
     _specialDestination.dispose();
     for (final article in _articles) {
       article.dispose();
@@ -337,7 +340,9 @@ class _CreateRequestViewState extends ConsumerState<CreateRequestView> {
                     _branchId = selected?.branchId;
                     _originId = value;
                     _destinationId = null;
-                    _fieldErrors = Map.of(_fieldErrors)..remove('origen_id');
+                    _fieldErrors = Map.of(_fieldErrors)
+                      ..remove('origen_id')
+                      ..remove('destino_id');
                   }),
           ),
           const SizedBox(height: AppSpacing.md),
@@ -407,7 +412,9 @@ class _CreateRequestViewState extends ConsumerState<CreateRequestView> {
                       : !hasOrigins
                       ? 'No hay un origen habilitado para esta solicitud.'
                       : _modality == RequestModalities.betweenBranches
-                      ? 'Selecciona el origen. Luego aparecerán las sucursales permitidas de la misma ciudad.'
+                      ? (_originId == null
+                            ? 'Selecciona el origen. Luego aparecerán las sucursales permitidas del mismo país y departamento.'
+                            : 'No hay sucursales de destino disponibles en el mismo departamento.')
                       : 'No hay empresas de transporte habilitadas como destino.'),
             ),
           ],
@@ -428,6 +435,19 @@ class _CreateRequestViewState extends ConsumerState<CreateRequestView> {
             ],
           ),
           const SizedBox(height: AppSpacing.sm),
+          TextFormField(
+            controller: _tubeCount,
+            enabled: !_saving,
+            keyboardType: TextInputType.number,
+            decoration: InputDecoration(
+              labelText: 'Cantidad de tubos',
+              helperText: 'Total de tubos que requiere este envío.',
+              errorText: _fieldError('cantidad_tubos'),
+            ),
+            validator: tubeCountError,
+            onChanged: (_) => _clearFieldError('cantidad_tubos'),
+          ),
+          const SizedBox(height: AppSpacing.md),
           if (_fieldError('articulos') case final articlesError?) ...[
             _FormNotice(icon: Icons.error_outline, message: articlesError),
             const SizedBox(height: AppSpacing.sm),
@@ -493,6 +513,7 @@ class _CreateRequestViewState extends ConsumerState<CreateRequestView> {
     try {
       final input = CreateServiceRequestInput(
         companyId: _companyId!,
+        tubeCount: int.parse(_tubeCount.text.trim()),
         branchId: _branchId,
         priority: _priority,
         modality: modality,
@@ -536,8 +557,7 @@ class _ModalityHint extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final message = switch (modality) {
-      RequestModalities.betweenBranches =>
-        'Traslado entre dos sucursales activas ubicadas en la misma ciudad.',
+      RequestModalities.betweenBranches => 'Traslado entre sucursales de la misma empresa, país y departamento. Pueden estar en distintas ciudades o municipios.',
       RequestModalities.transportCompany =>
         'Entrega desde una sucursal hacia una empresa de transporte aprobada.',
       RequestModalities.special => 'Destino libre. La distancia se calculará con el recorrido real del motorista.',

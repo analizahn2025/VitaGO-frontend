@@ -83,13 +83,18 @@ class FleetApiService {
   }
 
   Future<PaginatedResult<DriverProfile>> getAvailableDrivers({
+    int? tubeCount,
     int page = 1,
     int pageSize = 100,
   }) async {
     try {
       final response = await _apiClient.get<Map<String, dynamic>>(
         'repartidores/disponibles/',
-        queryParameters: {'pagina': page, 'tamano_pagina': pageSize},
+        queryParameters: {
+          'pagina': page,
+          'tamano_pagina': pageSize,
+          'cantidad_tubos': ?tubeCount,
+        },
       );
       return PaginatedResult.fromJson(
         _requiredData(response.data),
@@ -171,6 +176,7 @@ class FleetApiService {
       );
     }
   }
+
 
   Map<String, dynamic> _requiredData(Map<String, dynamic>? data) {
     if (data == null) throw const FormatException('Respuesta vacía.');

@@ -13,9 +13,12 @@ final routesRepositoryProvider = Provider<RoutesRepository>((ref) {
   return RoutesRepositoryImpl(ref.watch(routesApiServiceProvider));
 });
 
-final myRouteProvider = FutureProvider.autoDispose<DriverRoute>((ref) {
-  return ref.watch(routesRepositoryProvider).getMyRoute();
-});
+final myRouteProvider = FutureProvider.autoDispose<DriverRoute>(
+  (ref) => ref.watch(routesRepositoryProvider).getMyRoute(),
+  // Recovery is explicit (resume/reconnect/retry). Do not hide a failed refresh
+  // behind provider retries while the service action has already succeeded.
+  retry: (_, _) => null,
+);
 
 final calculateRouteProvider = Provider<RouteActionsController>((ref) {
   return RouteActionsController(ref.watch(routesRepositoryProvider));

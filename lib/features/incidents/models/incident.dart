@@ -96,7 +96,6 @@ class IncidentEvent {
 class CreateIncidentInput {
   const CreateIncidentInput({
     required this.description,
-    required this.reportedAt,
     this.requestId,
     this.latitude,
     this.longitude,
@@ -106,14 +105,12 @@ class CreateIncidentInput {
   final String description;
   final String? latitude;
   final String? longitude;
-  final DateTime reportedAt;
 
   Map<String, dynamic> toJson() => {
     'solicitud_id': _nullable(requestId),
     'descripcion': description.trim(),
     'latitud': _nullable(latitude),
     'longitud': _nullable(longitude),
-    'reportada_en': reportedAt.toUtc().toIso8601String(),
   };
 }
 
