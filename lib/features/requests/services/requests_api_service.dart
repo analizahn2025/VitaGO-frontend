@@ -157,11 +157,19 @@ class RequestsApiService {
     String requestId,
     int count,
     String reason,
+  ) => updateLoad(
+    requestId,
+    UpdateRequestLoadInput(tubeCount: count, reason: reason),
+  );
+
+  Future<ServiceRequestDetail> updateLoad(
+    String requestId,
+    UpdateRequestLoadInput input,
   ) async {
     try {
       final response = await _apiClient.patch<Map<String, dynamic>>(
-        'solicitudes/$requestId/cantidad-tubos/',
-        data: {'cantidad_tubos': count, 'motivo': reason.trim()},
+        'solicitudes/$requestId/carga/',
+        data: input.toJson(),
       );
       return ServiceRequestDetail.fromJson(_requiredData(response.data));
     } on DioException catch (error) {

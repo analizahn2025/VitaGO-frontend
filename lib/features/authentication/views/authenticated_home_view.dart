@@ -9,6 +9,8 @@ import 'package:vitago_app/features/authentication/controllers/auth_controller.d
 import 'package:vitago_app/features/home/models/app_section.dart';
 import 'package:vitago_app/features/home/views/home_overview_view.dart';
 import 'package:vitago_app/features/locations/views/locations_view.dart';
+import 'package:vitago_app/features/fleet/controllers/fleet_controller.dart';
+import 'package:vitago_app/features/operations/controllers/driver_delivery_controller.dart';
 import 'package:vitago_app/features/operations/views/driver_history_view.dart';
 import 'package:vitago_app/features/operations/views/operations_view.dart';
 import 'package:vitago_app/features/operations/widgets/driver_alerts_button.dart';
@@ -17,6 +19,7 @@ import 'package:vitago_app/features/profile/controllers/profile_controller.dart'
 import 'package:vitago_app/features/profile/models/user_profile.dart';
 import 'package:vitago_app/features/profile/views/profile_view.dart';
 import 'package:vitago_app/features/requests/views/requests_view.dart';
+import 'package:vitago_app/features/shifts/controllers/shifts_controller.dart';
 import 'package:vitago_app/features/tracking/widgets/driver_automatic_tracking.dart';
 import 'package:vitago_app/features/tracking/widgets/driver_arrival_listener.dart';
 import 'package:vitago_app/features/user_administration/views/users_view.dart';
@@ -146,6 +149,10 @@ class _AuthenticatedShellState extends ConsumerState<_AuthenticatedShell> {
           bottomNavigationBar: NavigationBar(
             selectedIndex: selectedIndex,
             onDestinationSelected: (index) {
+              if (navigationSections[index] == AppSection.account &&
+                  widget.profile.isDriver) {
+                _refreshDriverAccount();
+              }
               setState(() {
                 _selected = navigationSections[index];
                 _loadedSections.add(_selected);
@@ -204,7 +211,10 @@ class _AuthenticatedShellState extends ConsumerState<_AuthenticatedShell> {
         activationToken: _operationsActivationToken,
       ),
       AppSection.history => DriverHistoryView(profile: profile),
-      AppSection.account => ProfileView(profile: profile),
+      AppSection.account => ProfileView(
+        profile: profile,
+        isActive: _selected == AppSection.account,
+      ),
     };
   }
 
@@ -238,6 +248,9 @@ class _AuthenticatedShellState extends ConsumerState<_AuthenticatedShell> {
     List<AppSection> navigationSections,
   ) {
     if (navigationSections.contains(section)) {
+      if (section == AppSection.account && profile.isDriver) {
+        _refreshDriverAccount();
+      }
       setState(() {
         _selected = section;
         _loadedSections.add(section);
@@ -264,5 +277,12 @@ class _AuthenticatedShellState extends ConsumerState<_AuthenticatedShell> {
         ),
       ),
     );
+  }
+
+  void _refreshDriverAccount() {
+    ref.invalidate(activeShiftDayControllerProvider);
+    ref.invalidate(activeShiftControllerProvider);
+    ref.invalidate(ownDriverProfileControllerProvider);
+    ref.invalidate(driverDeliveryControllerProvider);
   }
 }

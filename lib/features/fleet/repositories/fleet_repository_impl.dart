@@ -30,7 +30,11 @@ class FleetRepositoryImpl implements FleetRepository {
   @override
   Future<PaginatedResult<DriverProfile>> getAvailableDrivers({
     int? tubeCount,
-  }) => _apiService.getAvailableDrivers(tubeCount: tubeCount);
+    int? flaskCount,
+  }) => _apiService.getAvailableDrivers(
+    tubeCount: tubeCount,
+    flaskCount: flaskCount,
+  );
 
   @override
   Future<DriverProfile> getDriver(String driverId) =>

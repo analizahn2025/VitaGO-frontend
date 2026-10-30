@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:vitago_app/app/config/app_config.dart';
 import 'package:vitago_app/app/theme/app_design_tokens.dart';
@@ -29,9 +28,9 @@ class CreateRequestView extends ConsumerStatefulWidget {
 class _CreateRequestViewState extends ConsumerState<CreateRequestView> {
   final _formKey = GlobalKey<FormState>();
   final _notes = TextEditingController();
-  final _tubeCount = TextEditingController();
+  final _tubeCount = TextEditingController(text: '0');
+  final _flaskCount = TextEditingController(text: '0');
   final _specialDestination = TextEditingController();
-  final List<_ArticleDraft> _articles = [_ArticleDraft()];
   String? _companyId;
   String? _branchId;
   String? _serviceTypeId;
@@ -47,10 +46,8 @@ class _CreateRequestViewState extends ConsumerState<CreateRequestView> {
   void dispose() {
     _notes.dispose();
     _tubeCount.dispose();
+    _flaskCount.dispose();
     _specialDestination.dispose();
-    for (final article in _articles) {
-      article.dispose();
-    }
     super.dispose();
   }
 
@@ -181,7 +178,7 @@ class _CreateRequestViewState extends ConsumerState<CreateRequestView> {
         children: [
           Text('Ruta', style: Theme.of(context).textTheme.headlineMedium),
           const SizedBox(height: AppSpacing.xs),
-          const Text('Define el traslado y registra al menos un artículo.'),
+          const Text('Define el traslado y declara los tubos y frascos.'),
           if (_error case final error?) ...[
             const SizedBox(height: AppSpacing.md),
             FormErrorSummary(message: error),
@@ -419,49 +416,45 @@ class _CreateRequestViewState extends ConsumerState<CreateRequestView> {
             ),
           ],
           const SizedBox(height: AppSpacing.xl),
-          Row(
+          Text('Contenido', style: Theme.of(context).textTheme.titleLarge),
+          const SizedBox(height: AppSpacing.sm),
+          const Text('Puedes llevar solo tubos, solo frascos o ambos.'),
+          const SizedBox(height: AppSpacing.md),
+          AdaptiveFormRow(
             children: [
-              Expanded(
-                child: Text(
-                  'Artículos',
-                  style: Theme.of(context).textTheme.titleLarge,
+              TextFormField(
+                controller: _tubeCount,
+                enabled: !_saving,
+                keyboardType: TextInputType.number,
+                decoration: InputDecoration(
+                  labelText: 'Tubos',
+                  errorText: _fieldError('cantidad_tubos'),
                 ),
+                validator: (value) =>
+                    nonNegativeContainerCountError(value, 'los tubos'),
+                onChanged: (_) {
+                  _clearFieldError('cantidad_tubos');
+                  setState(() {});
+                },
               ),
-              TextButton.icon(
-                onPressed: _saving ? null : _addArticle,
-                icon: const Icon(Icons.add),
-                label: const Text('Agregar'),
+              TextFormField(
+                controller: _flaskCount,
+                enabled: !_saving,
+                keyboardType: TextInputType.number,
+                decoration: InputDecoration(
+                  labelText: 'Frascos',
+                  errorText: _fieldError('cantidad_frascos'),
+                ),
+                validator: (value) =>
+                    nonNegativeContainerCountError(value, 'los frascos') ??
+                    containerLoadError(_tubeCount.text, value),
+                onChanged: (_) {
+                  _clearFieldError('cantidad_frascos');
+                  setState(() {});
+                },
               ),
             ],
           ),
-          const SizedBox(height: AppSpacing.sm),
-          TextFormField(
-            controller: _tubeCount,
-            enabled: !_saving,
-            keyboardType: TextInputType.number,
-            decoration: InputDecoration(
-              labelText: 'Cantidad de tubos',
-              helperText: 'Total de tubos que requiere este envío.',
-              errorText: _fieldError('cantidad_tubos'),
-            ),
-            validator: tubeCountError,
-            onChanged: (_) => _clearFieldError('cantidad_tubos'),
-          ),
-          const SizedBox(height: AppSpacing.md),
-          if (_fieldError('articulos') case final articlesError?) ...[
-            _FormNotice(icon: Icons.error_outline, message: articlesError),
-            const SizedBox(height: AppSpacing.sm),
-          ],
-          for (var index = 0; index < _articles.length; index++) ...[
-            _ArticleEditor(
-              index: index,
-              draft: _articles[index],
-              enabled: !_saving,
-              canRemove: _articles.length > 1,
-              onRemove: () => _removeArticle(index),
-            ),
-            const SizedBox(height: AppSpacing.sm),
-          ],
           const SizedBox(height: AppSpacing.md),
           TextFormField(
             controller: _notes,
@@ -492,14 +485,6 @@ class _CreateRequestViewState extends ConsumerState<CreateRequestView> {
     );
   }
 
-  void _addArticle() => setState(() => _articles.add(_ArticleDraft()));
-
-  void _removeArticle(int index) {
-    final removed = _articles.removeAt(index);
-    removed.dispose();
-    setState(() {});
-  }
-
   Future<void> _save() async {
     if (!(_formKey.currentState?.validate() ?? false)) return;
     final modality = _modality;
@@ -514,6 +499,7 @@ class _CreateRequestViewState extends ConsumerState<CreateRequestView> {
       final input = CreateServiceRequestInput(
         companyId: _companyId!,
         tubeCount: int.parse(_tubeCount.text.trim()),
+        flaskCount: int.parse(_flaskCount.text.trim()),
         branchId: _branchId,
         priority: _priority,
         modality: modality,
@@ -522,7 +508,6 @@ class _CreateRequestViewState extends ConsumerState<CreateRequestView> {
         destinationId: isSpecial ? null : _destinationId,
         specialDestination: isSpecial ? _specialDestination.text : null,
         notes: _notes.text,
-        items: _articles.map((item) => item.toInput()).toList(growable: false),
       );
       await ref.read(requestActionsControllerProvider).create(input);
       ref.invalidate(requesterSummaryControllerProvider);
@@ -606,152 +591,6 @@ class _FixedValue extends StatelessWidget {
     return InputDecorator(
       decoration: InputDecoration(labelText: label),
       child: Text(value),
-    );
-  }
-}
-
-class _ArticleDraft {
-  final type = TextEditingController();
-  final description = TextEditingController();
-  final quantity = TextEditingController(text: '1');
-  final referenceCode = TextEditingController();
-  final transportCondition = TextEditingController();
-  final notes = TextEditingController();
-
-  RequestArticleInput toInput() => RequestArticleInput(
-    itemType: type.text,
-    description: description.text,
-    quantity: quantity.text.replaceAll(',', '.'),
-    referenceCode: referenceCode.text,
-    transportCondition: transportCondition.text,
-    notes: notes.text,
-  );
-
-  void dispose() {
-    type.dispose();
-    description.dispose();
-    quantity.dispose();
-    referenceCode.dispose();
-    transportCondition.dispose();
-    notes.dispose();
-  }
-}
-
-class _ArticleEditor extends StatelessWidget {
-  const _ArticleEditor({
-    required this.index,
-    required this.draft,
-    required this.enabled,
-    required this.canRemove,
-    required this.onRemove,
-  });
-
-  final int index;
-  final _ArticleDraft draft;
-  final bool enabled;
-  final bool canRemove;
-  final VoidCallback onRemove;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: colors.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(AppRadii.control),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(AppSpacing.md),
-        child: Column(
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    'Artículo ${index + 1}',
-                    style: Theme.of(context).textTheme.titleMedium,
-                  ),
-                ),
-                if (canRemove)
-                  IconButton(
-                    onPressed: enabled ? onRemove : null,
-                    tooltip: 'Quitar artículo',
-                    icon: const Icon(Icons.delete_outline),
-                  ),
-              ],
-            ),
-            TextFormField(
-              controller: draft.type,
-              enabled: enabled,
-              maxLength: 120,
-              decoration: const InputDecoration(labelText: 'Tipo de artículo'),
-              validator: (value) => value == null || value.trim().isEmpty
-                  ? 'Indica el tipo de artículo.'
-                  : null,
-            ),
-            const SizedBox(height: AppSpacing.sm),
-            AdaptiveFormRow(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              flex: const [2, 1],
-              children: [
-                TextFormField(
-                  controller: draft.description,
-                  enabled: enabled,
-                  decoration: const InputDecoration(
-                    labelText: 'Descripción (opcional)',
-                  ),
-                ),
-                TextFormField(
-                  controller: draft.quantity,
-                  enabled: enabled,
-                  keyboardType: const TextInputType.numberWithOptions(
-                    decimal: true,
-                  ),
-                  inputFormatters: [
-                    FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]')),
-                  ],
-                  decoration: const InputDecoration(labelText: 'Cantidad'),
-                  validator: (value) {
-                    final number = double.tryParse(
-                      (value ?? '').replaceAll(',', '.'),
-                    );
-                    return number == null || number <= 0
-                        ? 'Mayor que 0.'
-                        : null;
-                  },
-                ),
-              ],
-            ),
-            const SizedBox(height: AppSpacing.sm),
-            TextFormField(
-              controller: draft.transportCondition,
-              enabled: enabled,
-              decoration: const InputDecoration(
-                labelText: 'Condición de transporte (opcional)',
-              ),
-            ),
-            const SizedBox(height: AppSpacing.sm),
-            TextFormField(
-              controller: draft.referenceCode,
-              enabled: enabled,
-              decoration: const InputDecoration(
-                labelText: 'Código de referencia (opcional)',
-              ),
-            ),
-            const SizedBox(height: AppSpacing.sm),
-            TextFormField(
-              controller: draft.notes,
-              enabled: enabled,
-              minLines: 2,
-              maxLines: 4,
-              decoration: const InputDecoration(
-                labelText: 'Notas del artículo (opcional)',
-                alignLabelWithHint: true,
-              ),
-            ),
-          ],
-        ),
-      ),
     );
   }
 }

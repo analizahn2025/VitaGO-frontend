@@ -75,6 +75,7 @@ class RequestRouteTile extends StatelessWidget {
                   ],
                   const SizedBox(height: AppSpacing.sm),
                   Text('Tubos: ${request.tubeCount ?? 'Sin declarar'}'),
+                  Text('Frascos: ${request.flaskCount ?? 'No registrado'}'),
                   Text(
                     requestModalityLabel(request.modality),
                     style: Theme.of(context).textTheme.labelMedium?.copyWith(

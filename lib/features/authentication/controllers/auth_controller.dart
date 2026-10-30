@@ -65,12 +65,13 @@ class AuthController extends AsyncNotifier<AuthState> {
       _clearLoginRetryCountdown();
       state = AsyncData(AuthState.authenticated(session));
     } on AppFailure catch (failure) {
-      final seconds = failure.retryAfterSeconds;
-      if (failure.isRateLimited && seconds != null && seconds > 0) {
-        _startLoginRetryCountdown(
-          seconds: seconds,
-          message: failure.message,
-        );
+      final seconds =
+          failure.retryAfterSeconds ??
+          (failure.isOperationalRecoveryPending ? 5 : null);
+      if ((failure.isRateLimited || failure.isOperationalRecoveryPending) &&
+          seconds != null &&
+          seconds > 0) {
+        _startLoginRetryCountdown(seconds: seconds, message: failure.message);
         return;
       }
       state = AsyncData(

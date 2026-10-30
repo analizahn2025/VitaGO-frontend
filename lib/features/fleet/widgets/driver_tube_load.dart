@@ -15,7 +15,8 @@ class DriverTubeLoad extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final load = _snapshot ?? DriverLoadSnapshot.fromProfile(_profile!);
-    final unknown = (load.requestsWithoutTubeCount ?? 0) > 0;
+    final unknownTubes = (load.requestsWithoutTubeCount ?? 0) > 0;
+    final unknownFlasks = (load.requestsWithoutFlaskCount ?? 0) > 0;
     final colors = Theme.of(context).colorScheme;
     return Container(
       padding: const EdgeInsets.all(AppSpacing.md),
@@ -28,7 +29,7 @@ class DriverTubeLoad extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Carga de tubos',
+            'Carga del motorista',
             style: Theme.of(context).textTheme.titleMedium,
           ),
           const SizedBox(height: AppSpacing.sm),
@@ -38,28 +39,49 @@ class DriverTubeLoad extends StatelessWidget {
             )
           else ...[
             Text('Límite: ${load.tubeLimit} tubos'),
-            if (unknown)
+            if (unknownTubes)
               Text(
                 '${load.requestsWithoutTubeCount} solicitudes sin cantidad declarada. La carga conocida es parcial; se requiere regularización administrativa.',
               ),
             Text(
-              '${unknown ? 'Comprometidos conocidos (parcial)' : 'Comprometidos'}: ${load.committedTubes ?? 'Sin información'}',
+              '${unknownTubes ? 'Comprometidos conocidos (parcial)' : 'Comprometidos'}: ${load.committedTubes ?? 'Sin información'}',
             ),
             Text(
-              '${unknown ? 'En transporte (parcial)' : 'En transporte'}: ${load.transportedTubes ?? 'Sin información'}',
+              '${unknownTubes ? 'En transporte (parcial)' : 'En transporte'}: ${load.transportedTubes ?? 'Sin información'}',
             ),
             Text(
-              '${unknown ? 'Reservados (parcial)' : 'Reservados'}: ${load.reservedTubes ?? 'Sin información'}',
+              '${unknownTubes ? 'Reservados (parcial)' : 'Reservados'}: ${load.reservedTubes ?? 'Sin información'}',
             ),
             Text(
-              'Disponibles: ${unknown ? 0 : load.availableTubes ?? 'Sin información'}',
+              'Disponibles: ${unknownTubes ? 0 : load.availableTubes ?? 'Sin información'}',
+            ),
+          ],
+          if (load.flaskLimit != null) ...[
+            const SizedBox(height: AppSpacing.md),
+            Text('Frascos', style: Theme.of(context).textTheme.titleSmall),
+            Text('Límite: ${load.flaskLimit}'),
+            if (unknownFlasks)
+              Text(
+                '${load.requestsWithoutFlaskCount} solicitudes sin cantidad de frascos registrada.',
+              ),
+            Text(
+              'Comprometidos${unknownFlasks ? ' conocidos (parcial)' : ''}: ${load.committedFlasks ?? 'Sin información'}',
+            ),
+            Text(
+              'En transporte${unknownFlasks ? ' (parcial)' : ''}: ${load.transportedFlasks ?? 'Sin información'}',
+            ),
+            Text(
+              'Reservados${unknownFlasks ? ' (parcial)' : ''}: ${load.reservedFlasks ?? 'Sin información'}',
+            ),
+            Text(
+              'Disponibles: ${unknownFlasks ? 0 : load.availableFlasks ?? 'Sin información'}',
             ),
           ],
           const SizedBox(height: AppSpacing.sm),
           Text(
             'Solicitudes: ${load.activeRequests ?? 'Sin información'} / ${load.requestLimit ?? 'Sin información'}',
           ),
-          if (unknown || load.capacity == 'FULL')
+          if (unknownTubes || unknownFlasks || load.capacity == 'FULL')
             const Text('Ocupado')
           else if (load.canReceiveRequests)
             const Text('Con cupo disponible'),

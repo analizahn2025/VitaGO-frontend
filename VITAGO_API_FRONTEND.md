@@ -18,7 +18,11 @@ El código del backend sigue siendo la fuente técnica definitiva. Este archivo
 es la referencia de integración para el frontend y solo presenta como
 **disponibles** las funciones que ya están implementadas.
 
-Última actualización: **2026-10-28**.
+Última actualización: **2026-10-30**.
+
+Contrato vigente: **0.44.0**. La sección 0.44 sustituye las instrucciones
+anteriores de creación con artículos y de tubos obligatoriamente positivos.
+La sección 0.43 define la espera temporal durante la recuperación operativa.
 
 Actualización **0.42.0**: jornada diaria hasta las 22:00 y almuerzo del motorista.
 La versión 0.41.0 incorporó cupos compartidos por empresa en Corporate o por toda
@@ -6894,3 +6898,388 @@ faltan publicar el backend 0.42.0, aplicar con autorización la migración
 `jornadas.0004_horario_diario_almuerzos` y configurar por modo el comando
 periódico `cerrar_operaciones_vencidas` cada minuto. El frontend mantiene
 compatibilidad de lectura con respuestas anteriores hasta ese despliegue.
+
+## 0.43.0 — Recuperación al encender o reactivar el servidor (2026-10-30)
+
+### Ejecución automática
+
+Corporate y Network verifican vencimientos en dos puntos del servidor:
+
+1. Al cargar la aplicación WSGI/ASGI, antes de atender operaciones. Incluye
+   `runserver` y Gunicorn con las entradas del proyecto.
+2. Antes de responder rutas `/api/` y `/admin/`, cuando vence la última revisión.
+   Así se recupera también al despertar sin reiniciar el proceso de Python.
+
+Se usa exclusivamente `timezone.now()` del backend. Corporate respeta el corte
+guardado en cada jornada y la zona de empresa para servicios; Network conserva
+la zona operativa del servidor. Se recuperan todos los días pendientes y no solo
+el anterior. El cierre efectivo permanece a las22:00 correspondientes; el
+evento conserva también la hora real de ejecución posterior.
+
+La recuperación reutiliza `procesar_cierre_diario`, `cerrar_solicitud_vencida`
+y `cerrar_jornada_vencida`. Incluye asignaciones, rutas, almuerzos y tramos
+especiales, con los estados fallidos de0.42.0. No crea una jornada nueva,
+acepta servicios ni inventa GPS, evidencia o entregas. Mantiene transacciones,
+orden de bloqueos e idempotencia: varios arranques no duplican eventos/avisos.
+Los datos existentes y cierres terminales históricos se conservan.
+
+Las jornadas se seleccionan por su `cierre_programado_en`, independientemente
+del huso actual de la empresa. Registros activos antiguos sin esos metadatos
+usan el cálculo de corte existente. Se incluyen perfiles antiguos sin empresa;
+su ausencia no deja pendiente globalmente una jornada vencida recuperable.
+
+### Revisión y fallos temporales
+
+La revisión correcta se reutiliza como máximo60segundos por proceso, sin
+consultas adicionales en las peticiones de ese intervalo. Nunca se extiende
+más allá del próximo corte22:00 de una empresa o del corte guardado de una
+jornada activa. Un reinicio revisa inmediatamente; una reactivación o salto
+de fecha invalida una revisión anterior. Si una comprobación cruza el corte,
+no habilita operaciones basándose en el resultado anterior a las22:00.
+
+Las peticiones simultáneas de un proceso comparten la revisión mediante un
+candado con espera hasta5segundos. Entre workers, los bloqueos y validaciones
+de los servicios existentes evitan duplicar cierres. La recuperación usa un
+presupuesto de5segundos comprobado entre unidades de trabajo, para poder
+continuar por partes con un atraso grande; una transacción en curso puede
+tardar más. El comando de mantenimiento conserva su recorrido completo por
+defecto. La recuperación de arranque no procesa reasignaciones por suspensión.
+
+Si hay errores, queda trabajo por procesar, sigue una jornada vencida con una
+asignación inconsistente o no se logra coordinar la revisión, la vista no se
+ejecuta. La respuesta exacta es:
+
+```http
+HTTP/1.1 503 Service Unavailable
+Retry-After: 5
+Cache-Control: no-store
+Content-Type: application/json
+```
+
+```json
+{
+  "detail": "El servidor está recuperando el cierre operativo. Intente nuevamente en unos segundos.",
+  "codigo": "CIERRE_OPERATIVO_PENDIENTE"
+}
+```
+
+Los fallos se registran en el servidor. Se vuelve a intentar al recibir una
+petición después de5segundos, sin registrar un fallo como recuperación correcta.
+El arranque puede dejar disponible el proceso HTTP para reintentar cuando la
+base vuelva; la API permanece503 hasta completar la preparación necesaria.
+No se devuelve el texto interno de la excepción al cliente.
+
+### Integración móvil/web
+
+La primera consulta de jornada/perfil tras un reinicio o una pausa del servidor
+ya ve los cierres recuperados. Por ejemplo, si se enciende el30/octubre con una
+jornada abierta del28/octubre, esta se cierra al28/octubre22:00 antes de responder
+el estado actual. Después aparece `jornada=null`, `cierre_pendiente=false` y
+`puede_iniciar_jornada=true` si el motorista cumple las condiciones para hoy.
+La jornada de hoy se inicia con el POST existente; no hay inicio automático.
+
+Se conservan endpoints, autenticación, permisos, campos normales y reglas de
+una jornada diaria/almuerzo. Para el503 con el código anterior, mostrar el
+mensaje de preparación temporal y permitir intentar otra vez después del
+Retry-After; no convertirlo en un error de correo, contraseña o JSON inválido.
+No hace falta añadir un botón de cierre pendiente ni llamar un endpoint nuevo.
+
+Desde esta versión el mantenimiento previo puede escribir incluso antes de
+un GET: **no asumir que un APIClient completo dentro de READ ONLY ejecutará
+automáticamente la preparación**. Para diagnósticos que deban ser exclusivamente
+de lectura, deshabilitar la preparación solo en ese proceso de comprobación.
+Los selectores y vistas de consulta mantienen su función de lectura.
+
+### Configuración y despliegue
+
+`HABILITAR_RECUPERACION_CIERRE=true` por defecto en las configuraciones normales;
+se aplica a ambas modalidades y no necesita otra variable obligatoria. En
+`config.settings.pruebas` se deshabilita por defecto para aislar fixtures;
+las pruebas de recuperación la habilitan expresamente con sus propios datos.
+No se conecta a bases reales durante pruebas.
+
+No hay migración nueva: usa el esquema0004 ya aplicado local y externamente.
+Para Render basta desplegar este código con las entradas WSGI/ASGI existentes;
+el Start Command actual de Gunicorn se conserva. No se creó cron, servicio
+pagado, hilo periódico, tarea Windows ni cambio de conexión/.env/frontend.
+Los comandos de Django de migración/check no arrancan el servidor ni ejecutan
+esta recuperación. Las conexiones usadas en el arranque se cierran para evitar
+heredarlas si el servidor precarga antes de crear workers.
+
+El cierre se recupera al arrancar o volver a atender peticiones. Si se necesita
+persistirlo exactamente a las22:00 mientras el servidor está encendido y sin
+tráfico, se mantiene el comando periódico documentado en0.42.0. Estando apagado,
+la recuperación registra la hora efectiva correcta al volver a funcionar.
+
+Implementación contrastada con la documentación oficial de
+[middleware de Django](https://docs.djangoproject.com/en/5.2/topics/http/middleware/)
+y [transacciones](https://docs.djangoproject.com/en/5.2/topics/db/transactions/).
+
+Validación0.43.0:825casos,798aprobados y27omitidos por requerir PostgreSQL,
+semilla4302. Incluye27casos nuevos de arranque WSGI/ASGI, pausa y varios días,
+corte exacto, revisión que cruza22:00, zona distinta, metadatos antiguos,
+perfiles sin empresa, coordinación de hilos, idempotencia, presupuesto y fallos
+transitorios/503 sin ejecutar la vista. Check, dry-run de migraciones y diff
+correctos. Se bloquearon las llamadas reales a Google. No se ejecutó recuperación
+externa como prueba, no se hizo commit/push ni se modificó frontend o conexión.
+
+## 0.44.0 — Tubos y frascos, sin artículos nuevos (2026-10-30)
+
+### Cantidades admitidas
+
+Cada solicitud declara únicamente `cantidad_tubos` y `cantidad_frascos` como
+contenido operativo. Ambos son enteros entre0y2147483647. Puede llevar solo
+tubos, solo frascos o ambos; al menos una cantidad debe ser mayor que cero.
+Si un campo se omite en una solicitud nueva, el servidor usa0. Se recomienda
+que el frontend envíe ambos explícitamente.
+
+`POST /solicitudes/` Corporate conserva los demás campos y permisos. Ejemplo
+completo de entrada entre sucursales, con UUID ilustrativos que se sustituyen
+por los catálogos autorizados del usuario:
+
+```json
+{
+  "empresa_id": "11111111-1111-4111-8111-111111111111",
+  "sucursal_id": "22222222-2222-4222-8222-222222222222",
+  "prioridad": "NORMAL",
+  "modalidad": "ENTRE_SUCURSALES",
+  "tipo_servicio_id": "33333333-3333-4333-8333-333333333333",
+  "origen_id": "44444444-4444-4444-8444-444444444444",
+  "destino_id": "55555555-5555-4555-8555-555555555555",
+  "cantidad_tubos": 8,
+  "cantidad_frascos": 3,
+  "notas": "Contenido listo para recolección."
+}
+```
+
+Se conserva201 y el detalle de solicitud existente. La creación en Network
+mantiene su409 de cotización pendiente; agregar recipientes no la habilita.
+El cálculo de cupos, la flota, las rutas y la lectura de datos contemplan ambos
+tipos en Corporate y Network.
+
+Enviar ambos en0 devuelve400 asociado a las cantidades. Valores negativos,
+fraccionarios, no enteros o fuera de rango se rechazan con su nombre de campo.
+Se retiró el antiguo requisito de `cantidad_tubos>=1`: un pedido de0tubos y
+3frascos es válido. Las comprobaciones de recolección y evidencias usan el
+par completo; fotografía y temperatura manual siguen siendo obligatorias.
+
+### Retiro de artículos y trazabilidad
+
+No enviar `articulos` en POST. Incluso `articulos=[]` devuelve400:
+
+```json
+{
+  "articulos": [
+    "Los artículos fueron retirados. Declare únicamente tubos y frascos."
+  ]
+}
+```
+
+El detalle ya no devuelve `articulos`; devuelve `articulos_historicos`, de solo
+lectura. Es una lista vacía para solicitudes nuevas. Para las anteriores
+conserva exactamente la estructura histórica `id`, `tipo_articulo`,
+`descripcion`, `cantidad`, `codigo_referencia`, `condicion_transporte`, `notas`.
+La tabla `articulos_solicitud` y sus registros permanecen intactos; no participan
+en los cupos ni se crean artículos nuevos. Se retiraron su serializador de
+creación y el manejo de errores por índice, que pertenecía al formulario viejo.
+
+Ejemplo de **fragmento** del detalle y listado; se conservan los otros campos:
+
+```json
+{
+  "cantidad_tubos": 8,
+  "cantidad_frascos": 3
+}
+```
+
+El detalle añade `articulos_historicos=[]` para una solicitud nueva. Listados,
+entregas recientes y paradas de `mi-ruta` también incluyen `cantidad_frascos`.
+El frontend operativo muestra los dos conteos, sin formulario ni selector de
+artículos. El contenido anterior puede mostrarse como historial, separado del
+conteo actual.
+
+### Configuración administrativa
+
+Se conservan endpoints y permisos de0.41.0; se añade `limite_frascos`:
+
+| Despliegue | GET/PATCH relativo a `/api/v1/` | Permiso para modificar |
+|---|---|---|
+| Corporate | `organizaciones/empresas/{empresa_id}/limites-motoristas/` | `empresa.administrar` para toda la empresa o global |
+| Network | `organizaciones/configuracion/limites-motoristas/` | `configuracion.administrar` global |
+
+La empresa configura una sola vez y cada motorista tiene su cupo individual
+con esos valores. Network mantiene una sola configuración de toda la red,
+sumando la carga de sus distintos clientes. No hay cupos configurables desde
+el perfil individual ni por empresa cliente Network. El motorista no modifica
+sus propios límites. El PATCH individual `limite_frascos` devuelve400 de campo.
+
+Ejemplo PATCH administrativo:
+
+```json
+{
+  "limite_tubos": 20,
+  "limite_frascos": 12,
+  "limite_solicitudes": 5,
+  "motivo": "Capacidad de los contenedores de la operación."
+}
+```
+
+Respuesta Corporate completa de límites (200):
+
+```json
+{
+  "empresa_id": "11111111-1111-4111-8111-111111111111",
+  "alcance": "EMPRESA",
+  "limite_tubos": 20,
+  "limite_frascos": 12,
+  "limite_solicitudes": 5
+}
+```
+
+Network devuelve el mismo objeto sin `empresa_id` y con `alcance="RED"`.
+En el objeto de empresa, `limites_motoristas` incorpora `limite_frascos`.
+Tubos/frascos aceptan límites enteros1..2147483647; solicitudes conserva1..5.
+Los límites previos de tubos y solicitudes no se modifican con la migración.
+El valor inicial de frascos es **20**, editable por administración. Los cupos
+son independientes.
+
+No se permite reducir un límite por debajo de la carga comprometida de algún
+motorista. Tampoco reducirlo si hay cantidades desconocidas de ese tipo.
+Los cambios registran usuario, motivo y valores anteriores/nuevos en el historial
+existente. Se conservan bloqueo de configuración y transacción compartidos
+con las asignaciones y correcciones, para no exceder cupos en carreras simultáneas.
+
+### Cupos independientes y asignación
+
+Para asignar deben caber **ambas cantidades** del pedido. Si un motorista lleva
+18frascos de20 y se piden3, se busca otro; si se piden2, puede recibirlo cuando
+cumpla el resto de reglas. Los tubos se evalúan por separado. Llenar el cupo de
+tubos permite recibir un pedido solo de frascos si aún tiene cupo de frascos,
+y viceversa. Un pedido mixto no cabe si cualquiera de sus cantidades excede
+el espacio de ese tipo. Se mantienen máximo5solicitudes, GPS/cercanía, ámbito
+de empresa/red, prioridad, exclusividad de especiales, jornada y almuerzo.
+
+`GET /repartidores/disponibles/?cantidad_tubos=2&cantidad_frascos=3` filtra por
+las dos cantidades. Para solo frascos basta `?cantidad_frascos=3`: tubos se
+interpreta como0, y viceversa. Sin cantidades (o ambas0), devuelve quienes
+tienen cupo en al menos un tipo, respetando las demás condiciones.
+
+Los perfiles/listados conservan sus campos de tubos y añaden:
+
+```json
+{
+  "limite_frascos": 20,
+  "frascos_comprometidos": 9,
+  "frascos_en_transporte": 4,
+  "frascos_reservados": 5,
+  "frascos_disponibles": 11,
+  "solicitudes_sin_cantidad_frascos": 0
+}
+```
+
+Comprometidos es la suma de los seis estados activos; reservados es la parte
+que aún no se recoge y en_transporte lo ya recogido. No se suman dos veces.
+PENDING y terminales no ocupan cupo. Asignar/reasignar/cancelar/fallar/finalizar
+actualiza ambas cargas en el servidor. No enviar capacidad desde el cliente.
+
+`capacidad=FULL` corresponde a máximo de solicitudes, ambos cupos agotados,
+algún cupo excedido en datos antiguos o cantidades activas desconocidas.
+`AVAILABLE_SPACE` indica que todavía cabe algún tipo; **no garantiza que quepa
+cualquier pedido**. Usar los cupos y el filtro con cantidades para una asignación
+concreta. Una carga antigua excedida no recibe nuevos pedidos de ningún tipo.
+La falta de cupo conserva409 con `repartidor_id` y mensaje del tipo insuficiente.
+
+### Corrección administrativa de la carga
+
+`PATCH /solicitudes/{solicitud_id}/carga/`, Bearer y permiso `solicitud.asignar`
+en el alcance de la solicitud; devuelve200 y detalle actualizado. Requiere al
+menos una cantidad y un motivo; se pueden cambiar las dos atómicamente:
+
+```json
+{
+  "cantidad_tubos": 8,
+  "cantidad_frascos": 0,
+  "motivo": "Conteo confirmado antes de recolección."
+}
+```
+
+La cantidad omitida se conserva, no se pone en0. La carga resultante debe ser
+conocida y no vacía. No se modifica una solicitud terminal ni una cantidad
+conocida después de recoger. Datos históricos desconocidos pueden completarse
+una sola vez con el conteo confirmado, incluso si ya se recogió. Se comprueban
+ambos cupos dentro de la transacción; se auditan las cantidades anteriores y
+nuevas, motivo y regularización histórica. Se reintenta la asignación pendiente
+con el mecanismo existente después del commit.
+
+`PATCH /solicitudes/{id}/cantidad-tubos/` se conserva como ruta obsoleta para
+compatibilidad, usando el mismo servicio de corrección. Solo cambia tubos;
+si se envía `cantidad_frascos` allí, devuelve400 indicando usar `/carga/`.
+Preferir siempre la nueva ruta. Un error sobre frascos conserva ese nombre de
+campo, por ejemplo:
+
+```json
+{"cantidad_frascos": "La modificación supera el cupo de frascos del motorista."}
+```
+
+### Históricos y resúmenes
+
+Las solicitudes anteriores a esta migración tienen `cantidad_frascos=null`:
+significa **no registrado**, no0. No se convierte texto ni cantidades de los
+artículos viejos a frascos. Los tubos previos y sus límites se conservan. Una
+solicitud histórica abierta con frascos desconocidos debe regularizarse mediante
+el PATCH de carga antes de asignar o confirmar recolección; la carga desconocida
+de un motorista impide agregarle solicitudes hasta completarla. Las terminales
+conservan null y sus artículos de historia; no se reescriben sus conteos.
+
+Los resúmenes administrativos y propios añaden el bloque:
+
+```json
+{
+  "frascos": {
+    "recogidos_conocidos": 9,
+    "entregados_conocidos": 7,
+    "recolecciones_sin_cantidad": 0,
+    "entregas_sin_cantidad": 0
+  }
+}
+```
+
+`carga_actual` incorpora los mismos campos nuevos del perfil, con los valores
+efectivos de límites. Se conservan fecha operativa, permisos, atribución por
+historial, tiempos, km y temperaturas. El frontend web debe distinguir conocidos
+y sin_cantidad; no convertir cantidades históricas null en0 para reportes.
+
+### Migraciones y entrega al frontend
+
+- `organizaciones.0004_tubos_frascos_sin_articulos`: límite de frascos en empresa
+  y configuración única de red, valor inicial20 y restricciones positivas.
+- `solicitudes.0009_tubos_frascos_sin_articulos`: cantidad de frascos nullable
+  para historia y0inicial para registros nuevos; permite0tubos y exige carga
+  conocida no vacía. No elimina modelos, tablas ni registros de artículos.
+
+Aplicadas en Network y Corporate **locales**, verificando38conteos de tablas
+existentes, tubos anteriores y límites anteriores intactos. Corporate local
+conserva19solicitudes y19artículos; frascos anteriores permanecen null. Ambas
+bases locales quedan sin migraciones pendientes.
+
+Precheck externo READ ONLY: destino Corporate/vitago_corporativo verificado,
+plan exclusivamente estas dos migraciones,24artículos para conservar y ninguna
+solicitud abierta en ese momento. **No se han aplicado externamente**: necesitan
+autorización explícita y luego publicación coordinada de este código. El frontend
+debe actualizar el POST y sus modelos antes de probar el nuevo contrato.
+
+Entrega móvil/web: reemplazar el formulario/lista editable de artículos por
+dos conteos («Tubos» y «Frascos»), permitir0en uno y exigir total>0; retirar
+`articulos` del POST; añadir campos de frascos en solicitudes, rutas, motoristas
+y resúmenes; agregar límite de frascos al panel de configuración compartida;
+usar `/carga/` para correcciones; tratar null históricos como «No registrado»
+y mostrar `articulos_historicos` únicamente en la historia. No convertir errores
+400/409 de campo en errores de conexión.
+
+Verificación:861casos,834aprobados/27omitidos por PostgreSQL, semilla4403,
+Google real bloqueado. Incluye36casos nuevos de cupos, cantidades, asignación,
+historia, migración, recolección con solo frascos, temperatura, administración,
+corrección y resumen. Cuatro GET200 en Corporate local sobre PostgreSQL READ
+ONLY, con preparación automática deshabilitada solo en ese diagnóstico:
+límites, motoristas, resúmenes y detalle con campos nuevos. Sin login ni
+tokens de prueba. No se modificó frontend, conexión, credenciales ni tareas.

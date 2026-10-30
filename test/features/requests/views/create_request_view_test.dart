@@ -13,6 +13,21 @@ import 'package:vitago_app/features/requests/repositories/requests_repository.da
 import 'package:vitago_app/features/requests/views/create_request_view.dart';
 
 void main() {
+  testWidgets('crea un envío solo con frascos y sin artículos', (tester) async {
+    final repository = _Repository(errorField: 'origen_id');
+    await _open(tester, repository);
+    await _select(tester, 'Modalidad del servicio', 'Entre sucursales');
+    await _select(tester, 'Origen', 'Kennedy');
+    await _select(tester, 'Sucursal de destino', 'El Zamorano');
+    await _select(tester, 'Servicio', 'Mensajería');
+    await tester.enterText(find.widgetWithText(TextFormField, 'Frascos'), '3');
+    await tester.tap(find.text('Crear solicitud'));
+    await tester.pumpAndSettle();
+    expect(repository.created?.tubeCount, 0);
+    expect(repository.created?.flaskCount, 3);
+    expect(repository.created?.toJson().containsKey('articulos'), isFalse);
+  });
+
   testWidgets(
     'cantidad de tubos no convierte fracciones o negativos en enteros',
     (tester) async {
@@ -22,12 +37,8 @@ void main() {
       await _select(tester, 'Origen', 'Kennedy');
       await _select(tester, 'Sucursal de destino', 'El Zamorano');
       await _select(tester, 'Servicio', 'Mensajería');
-      await tester.enterText(
-        find.widgetWithText(TextFormField, 'Tipo de artículo'),
-        'Tubos',
-      );
-      final field = find.widgetWithText(TextFormField, 'Cantidad de tubos');
-      for (final value in ['', '0', '-1', '1.5', '2147483648']) {
+      final field = find.widgetWithText(TextFormField, 'Tubos');
+      for (final value in ['', '-1', '1.5', '2147483648']) {
         await tester.enterText(field, value);
         await tester.tap(find.text('Crear solicitud'));
         await tester.pumpAndSettle();
@@ -88,14 +99,7 @@ void main() {
       await _select(tester, 'Origen', 'Kennedy');
       await _select(tester, 'Sucursal de destino', 'El Zamorano');
       await _select(tester, 'Servicio', 'Mensajería');
-      await tester.enterText(
-        find.widgetWithText(TextFormField, 'Cantidad de tubos'),
-        '3',
-      );
-      await tester.enterText(
-        find.widgetWithText(TextFormField, 'Tipo de artículo'),
-        'Documentos',
-      );
+      await tester.enterText(find.widgetWithText(TextFormField, 'Tubos'), '3');
       await tester.tap(find.text('Crear solicitud'));
       await tester.pumpAndSettle();
       expect(repository.created?.destinationId, 'location-zamorano');

@@ -1,32 +1,5 @@
 import 'package:vitago_app/features/tracking/models/tracking_point.dart';
 
-class RequestArticleInput {
-  const RequestArticleInput({
-    required this.itemType,
-    required this.quantity,
-    this.description,
-    this.referenceCode,
-    this.transportCondition,
-    this.notes,
-  });
-
-  final String itemType;
-  final String? description;
-  final String quantity;
-  final String? referenceCode;
-  final String? transportCondition;
-  final String? notes;
-
-  Map<String, dynamic> toJson() => {
-    'tipo_articulo': itemType.trim(),
-    'descripcion': _nullable(description),
-    'cantidad': quantity.trim(),
-    'codigo_referencia': _nullable(referenceCode),
-    'condicion_transporte': _nullable(transportCondition),
-    'notas': _nullable(notes),
-  };
-}
-
 class CreateServiceRequestInput {
   const CreateServiceRequestInput({
     required this.companyId,
@@ -34,8 +7,8 @@ class CreateServiceRequestInput {
     required this.modality,
     required this.serviceTypeId,
     required this.originId,
-    required this.items,
     required this.tubeCount,
+    required this.flaskCount,
     this.branchId,
     this.destinationId,
     this.specialDestination,
@@ -51,8 +24,8 @@ class CreateServiceRequestInput {
   final String? destinationId;
   final String? specialDestination;
   final String? notes;
-  final List<RequestArticleInput> items;
   final int tubeCount;
+  final int flaskCount;
 
   Map<String, dynamic> toJson() => {
     'empresa_id': companyId,
@@ -64,8 +37,26 @@ class CreateServiceRequestInput {
     'destino_id': _nullable(destinationId),
     'destino_especial': _nullable(specialDestination),
     'notas': _nullable(notes),
-    'articulos': items.map((item) => item.toJson()).toList(growable: false),
     'cantidad_tubos': tubeCount,
+    'cantidad_frascos': flaskCount,
+  };
+}
+
+class UpdateRequestLoadInput {
+  const UpdateRequestLoadInput({
+    required this.reason,
+    this.tubeCount,
+    this.flaskCount,
+  });
+
+  final int? tubeCount;
+  final int? flaskCount;
+  final String reason;
+
+  Map<String, dynamic> toJson() => {
+    if (tubeCount != null) 'cantidad_tubos': tubeCount,
+    if (flaskCount != null) 'cantidad_frascos': flaskCount,
+    'motivo': reason.trim(),
   };
 }
 

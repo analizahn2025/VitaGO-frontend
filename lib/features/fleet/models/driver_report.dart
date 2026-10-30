@@ -96,6 +96,19 @@ class DriverDailyReport {
     knownDeliveredTubes = optionalInt(tubes, 'entregados_conocidos');
     pickupsWithoutTubes = optionalInt(tubes, 'recolecciones_sin_cantidad');
     deliveriesWithoutTubes = optionalInt(tubes, 'entregas_sin_cantidad');
+    final flasks = optionalJsonMap(json, 'frascos');
+    knownPickedFlasks = flasks == null
+        ? null
+        : nullableInt(flasks, 'recogidos_conocidos');
+    knownDeliveredFlasks = flasks == null
+        ? null
+        : nullableInt(flasks, 'entregados_conocidos');
+    pickupsWithoutFlasks = flasks == null
+        ? null
+        : nullableInt(flasks, 'recolecciones_sin_cantidad');
+    deliveriesWithoutFlasks = flasks == null
+        ? null
+        : nullableInt(flasks, 'entregas_sin_cantidad');
     final mileage = requireJsonMap(json['kilometraje'], 'kilometraje');
     measuredKm = optionalString(mileage, 'kilometros_medidos');
     consolidatedKm = optionalString(mileage, 'kilometros_consolidados');
@@ -152,5 +165,9 @@ class DriverDailyReport {
       readingsWithTemperature,
       readingsWithoutTemperature;
   late final List<DriverTemperatureReading> recentReadings;
+  late final int? knownPickedFlasks,
+      knownDeliveredFlasks,
+      pickupsWithoutFlasks,
+      deliveriesWithoutFlasks;
   late final DriverLoadSnapshot currentLoad;
 }

@@ -41,6 +41,12 @@ class RequestsRepositoryImpl implements RequestsRepository {
   ) => _apiService.updateTubeCount(requestId, count, reason);
 
   @override
+  Future<ServiceRequestDetail> updateLoad(
+    String requestId,
+    UpdateRequestLoadInput input,
+  ) => _apiService.updateLoad(requestId, input);
+
+  @override
   Future<ServiceRequestDetail> createRequest(CreateServiceRequestInput input) =>
       _apiService.createRequest(input);
 

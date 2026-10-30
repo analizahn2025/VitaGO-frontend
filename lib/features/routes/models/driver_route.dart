@@ -73,6 +73,7 @@ class DriverRouteStop {
     this.location,
     this.specialDestination,
     this.tubeCount,
+    this.flaskCount,
   });
 
   factory DriverRouteStop.fromJson(Map<String, dynamic> json) {
@@ -82,6 +83,7 @@ class DriverRouteStop {
       requestId: requireString(json, 'solicitud_id'),
       requestNumber: requireString(json, 'numero_solicitud'),
       tubeCount: nullableInt(json, 'cantidad_tubos'),
+      flaskCount: nullableInt(json, 'cantidad_frascos'),
       priority: requireString(json, 'prioridad'),
       modality: requireString(json, 'modalidad'),
       requestStatus: requireString(json, 'estado_solicitud'),
@@ -96,6 +98,7 @@ class DriverRouteStop {
   final String requestId;
   final String requestNumber;
   final int? tubeCount;
+  final int? flaskCount;
   final String priority;
   final String modality;
   final String requestStatus;

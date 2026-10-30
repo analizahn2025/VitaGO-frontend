@@ -23,6 +23,10 @@ abstract interface class RequestsRepository {
     int count,
     String reason,
   );
+  Future<ServiceRequestDetail> updateLoad(
+    String requestId,
+    UpdateRequestLoadInput input,
+  );
 
   Future<ServiceRequestDetail> createRequest(CreateServiceRequestInput input);
 

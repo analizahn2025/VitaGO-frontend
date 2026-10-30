@@ -2,6 +2,20 @@
 
 ## 0. Identidad del producto
 
+### Contrato 0.43.0 y 0.44.0 (2026-10-30)
+
+- Un `503` con `codigo=CIERRE_OPERATIVO_PENDIENTE` y `Retry-After` indica que el
+  servidor prepara el cierre operativo. La app muestra la espera y permite
+  reintentar después; no lo trata como contraseña incorrecta o fallo de red.
+- Corporate crea solicitudes con `cantidad_tubos` y `cantidad_frascos` (enteros
+  no negativos, al menos uno positivo); no envía `articulos`. La historia previa
+  se lee desde `articulos_historicos` y un frasco `null` es «No registrado».
+- Asignación, ruta, flota, límites y reportes manejan cupos independientes.
+  Administración corrige la carga mediante `PATCH solicitudes/{id}/carga/`.
+- El contrato fuente indica que las migraciones 0.44 solo están aplicadas en
+  bases locales. El backend externo necesita migración y publicación coordinada
+  antes de probar la creación nueva con este APK.
+
 ### Jornada diaria y almuerzo (contrato 0.42.0)
 
 - Jornada activa usa `GET jornadas/activa/` con hora oficial del servidor,
@@ -10,6 +24,8 @@
 - Motorista inicia y finaliza almuerzo mediante dos POST `{}` bajo su jornada.
   Después se actualizan jornada, perfil, solicitudes y ruta. La pausa genérica
   `PAUSED` se distingue por `en_almuerzo`.
+- Los controles de almuerzo están en Cuenta > Mi jornada, con confirmación
+  antes de iniciar o regresar; la pantalla Hoy solo muestra el estado.
 - Administración filtra motoristas con `en_almuerzo=true` y ve la hora de inicio.
   El detalle de jornada conserva los intervalos de almuerzo.
 - Render todavía requiere despliegue backend 0.42.0, migración `jornadas.0004`

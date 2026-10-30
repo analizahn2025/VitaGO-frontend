@@ -11,6 +11,12 @@ class DriverLoadSnapshot {
     this.reservedTubes,
     this.availableTubes,
     this.requestsWithoutTubeCount,
+    this.flaskLimit,
+    this.committedFlasks,
+    this.transportedFlasks,
+    this.reservedFlasks,
+    this.availableFlasks,
+    this.requestsWithoutFlaskCount,
     required this.capacity,
     required this.canReceiveRequests,
   });
@@ -27,6 +33,15 @@ class DriverLoadSnapshot {
           json,
           'solicitudes_sin_cantidad_tubos',
         ),
+        flaskLimit: nullableInt(json, 'limite_frascos'),
+        committedFlasks: nullableInt(json, 'frascos_comprometidos'),
+        transportedFlasks: nullableInt(json, 'frascos_en_transporte'),
+        reservedFlasks: nullableInt(json, 'frascos_reservados'),
+        availableFlasks: nullableInt(json, 'frascos_disponibles'),
+        requestsWithoutFlaskCount: nullableInt(
+          json,
+          'solicitudes_sin_cantidad_frascos',
+        ),
         capacity: requireString(json, 'capacidad'),
         canReceiveRequests: optionalBool(json, 'puede_recibir_solicitudes'),
       );
@@ -40,6 +55,12 @@ class DriverLoadSnapshot {
         reservedTubes: driver.reservedTubes,
         availableTubes: driver.availableTubes,
         requestsWithoutTubeCount: driver.requestsWithoutTubeCount,
+        flaskLimit: driver.flaskLimit,
+        committedFlasks: driver.committedFlasks,
+        transportedFlasks: driver.transportedFlasks,
+        reservedFlasks: driver.reservedFlasks,
+        availableFlasks: driver.availableFlasks,
+        requestsWithoutFlaskCount: driver.requestsWithoutFlaskCount,
         capacity: driver.capacity,
         canReceiveRequests: driver.canReceiveRequests,
       );
@@ -50,7 +71,13 @@ class DriverLoadSnapshot {
       transportedTubes,
       reservedTubes,
       availableTubes,
-      requestsWithoutTubeCount;
+      requestsWithoutTubeCount,
+      flaskLimit,
+      committedFlasks,
+      transportedFlasks,
+      reservedFlasks,
+      availableFlasks,
+      requestsWithoutFlaskCount;
   final String capacity;
   final bool canReceiveRequests;
 }

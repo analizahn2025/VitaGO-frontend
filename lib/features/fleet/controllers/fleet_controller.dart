@@ -34,11 +34,13 @@ final availableDriversControllerProvider =
       return ref.watch(fleetRepositoryProvider).getAvailableDrivers();
     });
 
+typedef RequestLoad = ({int tubes, int flasks});
+
 final availableDriversForRequestControllerProvider = FutureProvider.autoDispose
-    .family<PaginatedResult<DriverProfile>, int>((ref, tubeCount) {
+    .family<PaginatedResult<DriverProfile>, RequestLoad>((ref, load) {
       return ref
           .watch(fleetRepositoryProvider)
-          .getAvailableDrivers(tubeCount: tubeCount);
+          .getAvailableDrivers(tubeCount: load.tubes, flaskCount: load.flasks);
     });
 
 final driverControllerProvider = FutureProvider.autoDispose

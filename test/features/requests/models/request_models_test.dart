@@ -121,6 +121,7 @@ void main() {
   test('serializa la creación sin inventar envoltorios', () {
     const input = CreateServiceRequestInput(
       tubeCount: 3,
+      flaskCount: 2,
       companyId: 'company-id',
       branchId: null,
       priority: 'NORMAL',
@@ -129,17 +130,11 @@ void main() {
       originId: 'origin-id',
       destinationId: 'destination-id',
       notes: '',
-      items: [
-        RequestArticleInput(
-          itemType: '  Caja  ',
-          quantity: '1.00',
-          description: '',
-        ),
-      ],
     );
 
     expect(input.toJson(), {
       'cantidad_tubos': 3,
+      'cantidad_frascos': 2,
       'empresa_id': 'company-id',
       'sucursal_id': null,
       'prioridad': 'NORMAL',
@@ -149,16 +144,6 @@ void main() {
       'destino_id': 'destination-id',
       'destino_especial': null,
       'notas': null,
-      'articulos': [
-        {
-          'tipo_articulo': 'Caja',
-          'descripcion': null,
-          'cantidad': '1.00',
-          'codigo_referencia': null,
-          'condicion_transporte': null,
-          'notas': null,
-        },
-      ],
     });
   });
 
@@ -305,6 +290,7 @@ void main() {
   test('serializa un envío especial con destino libre', () {
     const input = CreateServiceRequestInput(
       tubeCount: 2,
+      flaskCount: 0,
       companyId: 'company-id',
       branchId: 'branch-id',
       priority: 'NORMAL',
@@ -313,7 +299,6 @@ void main() {
       originId: 'origin-id',
       destinationId: null,
       specialDestination: '  Clínica móvil  ',
-      items: [RequestArticleInput(itemType: 'Caja', quantity: '1')],
     );
 
     expect(input.toJson()['destino_id'], isNull);

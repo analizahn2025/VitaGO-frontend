@@ -148,7 +148,7 @@ class _OperationsViewState extends ConsumerState<OperationsView>
                   day.closurePending || day.isAfterCut
                       ? 'La operación de hoy terminó a las 22:00.'
                       : shift?.onLunch == true
-                      ? 'Estás en almuerzo. Regresa desde esta jornada cuando estés listo.'
+                      ? 'Estás en almuerzo. Ve a Cuenta para marcar tu regreso.'
                       : shift == null
                       ? day.shiftStartedToday == true
                             ? 'Tu jornada de hoy ya finalizó.'
@@ -210,7 +210,7 @@ class _OperationsViewState extends ConsumerState<OperationsView>
                 if (shift == null)
                   _buildInactiveActions(day, deliveryBoard, driverProfile)
                 else
-                  _buildActiveActions(day, shift, deliveryBoard, driverProfile),
+                  _buildActiveActions(day, shift, deliveryBoard),
               ],
             ),
           ),
@@ -274,46 +274,18 @@ class _OperationsViewState extends ConsumerState<OperationsView>
     ActiveShiftDay day,
     DriverShift shift,
     AsyncValue<DriverDeliveryBoard> deliveryBoard,
-    AsyncValue<DriverProfile> driverProfile,
   ) {
     final board = deliveryBoard.value;
     final canFinishFromBoard =
         deliveryBoard.hasValue && !(board?.hasActiveAssignments ?? true);
     final canOperate =
         shift.isOperational && !day.closurePending && !day.isAfterCut;
-    final canStartLunch =
-        day.supportsDailySchedule &&
-        canOperate &&
-        !shift.onLunch &&
-        driverProfile.value?.operationalStatus == 'AVAILABLE' &&
-        canFinishFromBoard &&
-        widget.profile.can(AppPermissions.updateOwnDriverStatus);
-    final canFinishLunch =
-        day.supportsDailySchedule &&
-        shift.onLunch &&
-        !day.closurePending &&
-        !day.isAfterCut &&
-        widget.profile.can(AppPermissions.updateOwnDriverStatus);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         if (shift.onLunch && day.supportsDailySchedule) ...[
           _MessageBand(
-            message: 'En almuerzo. No recibirás nuevas asignaciones hasta que regreses.',
-          ),
-          const SizedBox(height: AppSpacing.md),
-        ],
-        if (canStartLunch || canFinishLunch) ...[
-          FilledButton.tonalIcon(
-            onPressed: _busy
-                ? null
-                : () => _changeLunch(shift.id, finish: canFinishLunch),
-            icon: Icon(
-              canFinishLunch ? Icons.play_arrow : Icons.lunch_dining_outlined,
-            ),
-            label: Text(
-              canFinishLunch ? 'Regresé del almuerzo' : 'Iniciar almuerzo',
-            ),
+            message: 'En almuerzo. Ve a Cuenta para marcar tu regreso.',
           ),
           const SizedBox(height: AppSpacing.md),
         ],
@@ -379,55 +351,6 @@ class _OperationsViewState extends ConsumerState<OperationsView>
     _cutRefreshTimer = Timer(cut.difference(serverNow), () {
       if (mounted) unawaited(_refreshDelivery());
     });
-  }
-
-  Future<void> _changeLunch(String shiftId, {required bool finish}) async {
-    setState(() {
-      _busy = true;
-      _error = null;
-    });
-    try {
-      final actions = ref.read(shiftActionsControllerProvider);
-      if (finish) {
-        await actions.finishLunch(shiftId);
-      } else {
-        await actions.startLunch(shiftId);
-      }
-      ref.invalidate(activeShiftDayControllerProvider);
-      ref.invalidate(activeShiftControllerProvider);
-      ref.invalidate(ownDriverProfileControllerProvider);
-      ref.invalidate(driverDeliveryControllerProvider);
-      ref.invalidate(myRouteProvider);
-      await ref.read(activeShiftDayControllerProvider.future);
-      try {
-        await Future.wait([
-          ref.read(ownDriverProfileControllerProvider.future),
-          ref.read(driverDeliveryControllerProvider.future),
-        ]);
-      } on Object {
-        if (mounted) {
-          setState(
-            () => _error = 'El almuerzo se actualizó. Desliza hacia abajo para volver a cargar tus servicios.',
-          );
-        }
-      }
-      try {
-        await ref.read(myRouteProvider.future);
-      } on Object {
-        // La jornada se actualizó; la ruta puede estar temporalmente inactiva.
-      }
-    } on AppFailure catch (failure) {
-      if (mounted) {
-        setState(
-          () => _error =
-              failure.fieldMessage('almuerzo', 'jornada') ??
-              failure.fieldMessage('estado_operativo') ??
-              failure.message,
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _busy = false);
-    }
   }
 
   Future<void> _refreshDelivery() async {

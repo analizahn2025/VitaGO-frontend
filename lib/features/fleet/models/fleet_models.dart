@@ -101,6 +101,12 @@ class DriverProfile {
     this.reservedTubes,
     this.availableTubes,
     this.requestsWithoutTubeCount,
+    this.flaskLimit,
+    this.committedFlasks,
+    this.transportedFlasks,
+    this.reservedFlasks,
+    this.availableFlasks,
+    this.requestsWithoutFlaskCount,
     this.companyId,
     this.vehicle,
     this.onLunch = false,
@@ -130,6 +136,15 @@ class DriverProfile {
         json,
         'solicitudes_sin_cantidad_tubos',
       ),
+      flaskLimit: nullableInt(json, 'limite_frascos'),
+      committedFlasks: nullableInt(json, 'frascos_comprometidos'),
+      transportedFlasks: nullableInt(json, 'frascos_en_transporte'),
+      reservedFlasks: nullableInt(json, 'frascos_reservados'),
+      availableFlasks: nullableInt(json, 'frascos_disponibles'),
+      requestsWithoutFlaskCount: nullableInt(
+        json,
+        'solicitudes_sin_cantidad_frascos',
+      ),
       active: optionalBool(json, 'activo'),
       createdAt: requireDateTime(json, 'creado_en'),
       updatedAt: requireDateTime(json, 'actualizado_en'),
@@ -153,6 +168,12 @@ class DriverProfile {
   final int? reservedTubes;
   final int? availableTubes;
   final int? requestsWithoutTubeCount;
+  final int? flaskLimit;
+  final int? committedFlasks;
+  final int? transportedFlasks;
+  final int? reservedFlasks;
+  final int? availableFlasks;
+  final int? requestsWithoutFlaskCount;
   final bool active;
   final DateTime createdAt;
   final DateTime updatedAt;

@@ -84,6 +84,7 @@ class FleetApiService {
 
   Future<PaginatedResult<DriverProfile>> getAvailableDrivers({
     int? tubeCount,
+    int? flaskCount,
     int page = 1,
     int pageSize = 100,
   }) async {
@@ -94,6 +95,7 @@ class FleetApiService {
           'pagina': page,
           'tamano_pagina': pageSize,
           'cantidad_tubos': ?tubeCount,
+          'cantidad_frascos': ?flaskCount,
         },
       );
       return PaginatedResult.fromJson(
@@ -176,7 +178,6 @@ class FleetApiService {
       );
     }
   }
-
 
   Map<String, dynamic> _requiredData(Map<String, dynamic>? data) {
     if (data == null) throw const FormatException('Respuesta vacía.');

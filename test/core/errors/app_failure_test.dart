@@ -77,16 +77,37 @@ void main() {
     expect(failure.fieldErrors, isEmpty);
   });
 
+  test('reconoce la recuperación operativa y respeta Retry-After', () {
+    final options = RequestOptions(path: 'autenticacion/iniciar-sesion/');
+    final failure = AppFailure.fromDio(
+      DioException(
+        requestOptions: options,
+        response: Response<Map<String, dynamic>>(
+          requestOptions: options,
+          statusCode: 503,
+          headers: Headers.fromMap({
+            'retry-after': ['5'],
+          }),
+          data: {
+            'codigo': 'CIERRE_OPERATIVO_PENDIENTE',
+            'detail': 'El servidor está recuperando el cierre operativo.',
+          },
+        ),
+      ),
+    );
+
+    expect(failure.isOperationalRecoveryPending, isTrue);
+    expect(failure.isRateLimited, isFalse);
+    expect(failure.retryAfterSeconds, 5);
+    expect(failure.message, contains('recuperando'));
+  });
+
   test('lee la espera de un 429 desde Retry-After', () {
     final failure = AppFailure.fromDio(
       DioException(
-        requestOptions: RequestOptions(
-          path: 'autenticacion/iniciar-sesion/',
-        ),
+        requestOptions: RequestOptions(path: 'autenticacion/iniciar-sesion/'),
         response: Response<Map<String, dynamic>>(
-          requestOptions: RequestOptions(
-            path: 'autenticacion/iniciar-sesion/',
-          ),
+          requestOptions: RequestOptions(path: 'autenticacion/iniciar-sesion/'),
           statusCode: 429,
           headers: Headers.fromMap({
             'retry-after': ['125'],
@@ -108,21 +129,14 @@ void main() {
   test('usa segundos_espera cuando Retry-After no es válido', () {
     final failure = AppFailure.fromDio(
       DioException(
-        requestOptions: RequestOptions(
-          path: 'autenticacion/iniciar-sesion/',
-        ),
+        requestOptions: RequestOptions(path: 'autenticacion/iniciar-sesion/'),
         response: Response<Map<String, dynamic>>(
-          requestOptions: RequestOptions(
-            path: 'autenticacion/iniciar-sesion/',
-          ),
+          requestOptions: RequestOptions(path: 'autenticacion/iniciar-sesion/'),
           statusCode: 429,
           headers: Headers.fromMap({
             'retry-after': ['valor-inválido'],
           }),
-          data: {
-            'detail': 'Intenta más tarde.',
-            'segundos_espera': 47,
-          },
+          data: {'detail': 'Intenta más tarde.', 'segundos_espera': 47},
         ),
       ),
     );

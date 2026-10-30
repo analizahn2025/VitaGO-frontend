@@ -52,6 +52,11 @@ class RequestActionsController {
     String reason,
   ) => _repository.updateTubeCount(requestId, count, reason);
 
+  Future<ServiceRequestDetail> updateLoad(
+    String requestId,
+    UpdateRequestLoadInput input,
+  ) => _repository.updateLoad(requestId, input);
+
   Future<ServiceRequestDetail> assign(
     String requestId,
     RequestAssignmentInput input,

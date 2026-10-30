@@ -333,6 +333,30 @@ class DriverReportDetailView extends ConsumerWidget {
                                 ),
                             ],
                           ),
+                          if (report.knownPickedFlasks != null)
+                            _ReportSection(
+                              title: 'Frascos del día',
+                              children: [
+                                Text(
+                                  'Recogidos conocidos: ${report.knownPickedFlasks}',
+                                ),
+                                Text(
+                                  'Entregados conocidos: ${report.knownDeliveredFlasks}',
+                                ),
+                                Text(
+                                  'Recolecciones sin cantidad: ${report.pickupsWithoutFlasks}',
+                                ),
+                                Text(
+                                  'Entregas sin cantidad: ${report.deliveriesWithoutFlasks}',
+                                ),
+                                if ((report.pickupsWithoutFlasks ?? 0) +
+                                        (report.deliveriesWithoutFlasks ?? 0) >
+                                    0)
+                                  const Text(
+                                    'Los conteos conocidos son parciales.',
+                                  ),
+                              ],
+                            ),
                           _ReportSection(
                             title: 'Km de jornadas cerradas',
                             children: [

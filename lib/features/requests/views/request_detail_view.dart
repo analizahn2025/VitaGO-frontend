@@ -12,7 +12,7 @@ import 'package:vitago_app/features/profile/models/user_profile.dart';
 import 'package:vitago_app/features/requests/controllers/requests_controller.dart';
 import 'package:vitago_app/features/requests/models/request_models.dart';
 import 'package:vitago_app/features/requests/views/assign_request_view.dart';
-import 'package:vitago_app/features/requests/views/update_request_tube_count_view.dart';
+import 'package:vitago_app/features/requests/views/update_request_load_view.dart';
 import 'package:vitago_app/features/requests/views/cancel_request_dialog.dart';
 import 'package:vitago_app/features/requests/views/widgets/driver_request_actions.dart';
 import 'package:vitago_app/features/shifts/controllers/shifts_controller.dart';
@@ -175,23 +175,18 @@ class _RequestDetailContent extends ConsumerWidget {
                   specialDestination: summary.specialDestination,
                 ),
                 const SizedBox(height: AppSpacing.md),
-                Text(
-                  'Cantidad de tubos: ${summary.tubeCount ?? 'Sin declarar'}',
-                ),
-                if (canUpdateRequestTubeCount(request, profile))
+                Text('Tubos: ${summary.tubeCount ?? 'No registrado'}'),
+                Text('Frascos: ${summary.flaskCount ?? 'No registrado'}'),
+                if (canUpdateRequestLoad(request, profile))
                   Align(
                     alignment: Alignment.centerLeft,
                     child: TextButton.icon(
                       icon: const Icon(Icons.edit_outlined),
-                      label: Text(
-                        summary.tubeCount == null
-                            ? 'Declarar cantidad de tubos'
-                            : 'Corregir cantidad de tubos',
-                      ),
+                      label: const Text('Corregir carga'),
                       onPressed: () async {
                         final updated = await Navigator.of(context).push<bool>(
                           MaterialPageRoute(
-                            builder: (_) => UpdateRequestTubeCountView(
+                            builder: (_) => UpdateRequestLoadView(
                               request: request,
                               profile: profile,
                             ),
@@ -324,13 +319,17 @@ class _RequestDetailContent extends ConsumerWidget {
                     padding: EdgeInsets.symmetric(vertical: AppSpacing.sm),
                     child: Text('Tu perfil no puede consultar evidencias.'),
                   ),
-                const SizedBox(height: AppSpacing.xl),
-                Text(
-                  'Artículos',
-                  style: Theme.of(context).textTheme.titleLarge,
-                ),
-                const SizedBox(height: AppSpacing.sm),
-                ...request.items.map((item) => _ArticleTile(item: item)),
+                if (request.historicalArticles.isNotEmpty) ...[
+                  const SizedBox(height: AppSpacing.xl),
+                  Text(
+                    'Artículos históricos',
+                    style: Theme.of(context).textTheme.titleLarge,
+                  ),
+                  const SizedBox(height: AppSpacing.sm),
+                  ...request.historicalArticles.map(
+                    (item) => _ArticleTile(item: item),
+                  ),
+                ],
                 const SizedBox(height: AppSpacing.xl),
                 Text(
                   'Historial',

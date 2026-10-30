@@ -92,7 +92,7 @@ class _DriverRequestActionsState extends ConsumerState<DriverRequestActions> {
       mainAxisSize: MainAxisSize.min,
       children: [
         Text(
-          'Cantidad de tubos: ${request.summary.tubeCount ?? 'Sin declarar'}',
+          'Tubos: ${request.summary.tubeCount ?? 'No registrado'} · Frascos: ${request.summary.flaskCount ?? 'No registrado'}',
         ),
         const SizedBox(height: AppSpacing.sm),
         if (profile.isDriver && (shift.isLoading || gps?.isLoading == true))

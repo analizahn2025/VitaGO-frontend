@@ -26,6 +26,15 @@ class AppFailure implements Exception {
       );
     }
 
+    if (statusCode == 503 && serverCode == 'CIERRE_OPERATIVO_PENDIENTE') {
+      return AppFailure(
+        message: _readDetail(data) ?? 'Estamos preparando el servicio. Inténtalo de nuevo en unos segundos.',
+        statusCode: statusCode,
+        serverCode: serverCode,
+        retryAfterSeconds: _readRetryAfterSeconds(error.response),
+      );
+    }
+
     if (statusCode != null && statusCode >= 500) {
       return AppFailure(
         message:
@@ -126,6 +135,8 @@ class AppFailure implements Exception {
   bool get isConflict => statusCode == 409;
 
   bool get isRateLimited => statusCode == 429;
+  bool get isOperationalRecoveryPending =>
+      statusCode == 503 && serverCode == 'CIERRE_OPERATIVO_PENDIENTE';
 
   String? fieldMessage(String key, [String? alternativeKey]) {
     final messages =

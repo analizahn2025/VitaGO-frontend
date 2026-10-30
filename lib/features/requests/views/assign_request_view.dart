@@ -37,20 +37,24 @@ class _AssignRequestViewState extends ConsumerState<AssignRequestView> {
 
   @override
   Widget build(BuildContext context) {
-    final count = widget.request.summary.tubeCount;
-    if (count == null) {
+    final tubes = widget.request.summary.tubeCount;
+    final flasks = widget.request.summary.flaskCount;
+    if (tubes == null || flasks == null) {
       return Scaffold(
         appBar: AppBar(title: const Text('Asignar motorista')),
         body: const SafeArea(
           child: AppEmptyView(
             icon: Icons.science_outlined,
-            title: 'Cantidad de tubos sin declarar',
-            message: 'Regulariza la cantidad de tubos desde el detalle antes de asignar este envío.',
+            title: 'Carga sin declarar',
+            message: 'Regulariza los tubos y frascos desde el detalle antes de asignar este envío.',
           ),
         ),
       );
     }
-    final provider = availableDriversForRequestControllerProvider(count);
+    final provider = availableDriversForRequestControllerProvider((
+      tubes: tubes,
+      flasks: flasks,
+    ));
     final drivers = ref.watch(provider);
     return Scaffold(
       appBar: AppBar(
@@ -110,7 +114,7 @@ class _AssignRequestViewState extends ConsumerState<AssignRequestView> {
           const AppEmptyView(
             icon: Icons.no_accounts_outlined,
             title: 'No hay motoristas disponibles',
-            message: 'No hay motoristas elegibles con cupo para estos tubos y solicitudes.',
+            message: 'No hay motoristas con cupo para los tubos y frascos de este envío.',
           )
         else ...[
           DropdownButtonFormField<String>(
@@ -123,7 +127,7 @@ class _AssignRequestViewState extends ConsumerState<AssignRequestView> {
                   (driver) => DropdownMenuItem(
                     value: driver.id,
                     child: Text(
-                      '${driver.user.fullName} · ${driver.availableTubes == null ? 'Cupo según servidor' : '${driver.availableTubes} tubos libres'}',
+                      '${driver.user.fullName} · ${driver.availableTubes ?? '?'} tubos · ${driver.availableFlasks ?? '?'} frascos libres',
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),
@@ -179,9 +183,10 @@ class _AssignRequestViewState extends ConsumerState<AssignRequestView> {
     } on AppFailure catch (failure) {
       if (mounted) {
         ref.invalidate(
-          availableDriversForRequestControllerProvider(
-            widget.request.summary.tubeCount!,
-          ),
+          availableDriversForRequestControllerProvider((
+            tubes: widget.request.summary.tubeCount!,
+            flasks: widget.request.summary.flaskCount!,
+          )),
         );
         setState(
           () =>

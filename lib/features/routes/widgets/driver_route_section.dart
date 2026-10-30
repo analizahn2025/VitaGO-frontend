@@ -199,6 +199,10 @@ class _CompactStop extends StatelessWidget {
                   'Tubos: ${stop.tubeCount ?? 'Sin declarar'}',
                   style: Theme.of(context).textTheme.bodySmall,
                 ),
+                Text(
+                  'Frascos: ${stop.flaskCount ?? 'No registrado'}',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
               ],
             ),
           ),

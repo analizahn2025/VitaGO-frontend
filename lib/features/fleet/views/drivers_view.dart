@@ -107,8 +107,8 @@ class _DriversViewState extends ConsumerState<DriversView> {
             subtitle: driver.onLunch
                 ? 'En almuerzo${driver.lunchStartedAt == null ? '' : ' desde ${AppDateFormat.dateTime(driver.lunchStartedAt!)}'}'
                 : vehicle == null
-                ? 'Sin vehículo asignado · Límite ${driver.tubeLimit ?? 'sin información'} tubos'
-                : '${vehicle.plate} · Límite ${driver.tubeLimit ?? 'sin información'} tubos',
+                ? 'Sin vehículo asignado · ${driver.tubeLimit ?? '?'} tubos · ${driver.flaskLimit ?? '?'} frascos'
+                : '${vehicle.plate} · ${driver.tubeLimit ?? '?'} tubos · ${driver.flaskLimit ?? '?'} frascos',
             status: driver.operationalStatus,
             onTap: () async {
               await Navigator.of(context).push<void>(

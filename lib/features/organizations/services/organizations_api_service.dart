@@ -33,7 +33,9 @@ class OrganizationsApiService {
     String? companyId,
     UpdateDriverLimitsInput input,
   ) async {
-    if (input.tubeLimit == null && input.requestLimit == null) {
+    if (input.tubeLimit == null &&
+        input.flaskLimit == null &&
+        input.requestLimit == null) {
       throw const AppFailure(message: 'Cambia al menos un límite.');
     }
     try {

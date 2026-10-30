@@ -82,6 +82,9 @@ class _LimitsFormState extends ConsumerState<_LimitsForm> {
   late final _requests = TextEditingController(
     text: widget.limits.requestLimit.toString(),
   );
+  late final _flasks = TextEditingController(
+    text: widget.limits.flaskLimit?.toString() ?? '',
+  );
   final _reason = TextEditingController();
   AppFailure? _failure;
   bool _saving = false;
@@ -89,6 +92,7 @@ class _LimitsFormState extends ConsumerState<_LimitsForm> {
   void dispose() {
     _tubes.dispose();
     _requests.dispose();
+    _flasks.dispose();
     _reason.dispose();
     super.dispose();
   }
@@ -105,6 +109,8 @@ class _LimitsFormState extends ConsumerState<_LimitsForm> {
           : widget.limits.scope == 'RED');
   bool get _changed =>
       int.tryParse(_tubes.text.trim()) != widget.limits.tubeLimit ||
+      (widget.limits.flaskLimit != null &&
+          int.tryParse(_flasks.text.trim()) != widget.limits.flaskLimit) ||
       int.tryParse(_requests.text.trim()) != widget.limits.requestLimit;
   void _edited(String _) => setState(() => _failure = null);
   @override
@@ -166,6 +172,20 @@ class _LimitsFormState extends ConsumerState<_LimitsForm> {
             ),
           ],
         ),
+        if (widget.limits.flaskLimit != null) ...[
+          const SizedBox(height: AppSpacing.md),
+          TextFormField(
+            controller: _flasks,
+            enabled: _editable && !_saving,
+            keyboardType: TextInputType.number,
+            onChanged: _edited,
+            decoration: InputDecoration(
+              labelText: 'Límite de frascos',
+              errorText: _failure?.fieldMessage('limite_frascos'),
+            ),
+            validator: tubeCountError,
+          ),
+        ],
         if (_editable) ...[
           const SizedBox(height: AppSpacing.md),
           TextFormField(
@@ -213,6 +233,11 @@ class _LimitsFormState extends ConsumerState<_LimitsForm> {
                   int.parse(_tubes.text.trim()) == widget.limits.tubeLimit
                   ? null
                   : int.parse(_tubes.text.trim()),
+              flaskLimit:
+                  widget.limits.flaskLimit == null ||
+                      int.parse(_flasks.text.trim()) == widget.limits.flaskLimit
+                  ? null
+                  : int.parse(_flasks.text.trim()),
               requestLimit:
                   int.parse(_requests.text.trim()) == widget.limits.requestLimit
                   ? null

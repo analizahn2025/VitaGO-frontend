@@ -8,11 +8,13 @@ import 'package:vitago_app/features/fleet/models/fleet_models.dart';
 import 'package:vitago_app/features/fleet/views/update_driver_operation_view.dart';
 import 'package:vitago_app/features/operations/widgets/driver_profile_card.dart';
 import 'package:vitago_app/features/profile/models/user_profile.dart';
+import 'package:vitago_app/features/shifts/widgets/driver_lunch_section.dart';
 
 class ProfileView extends ConsumerWidget {
-  const ProfileView({required this.profile, super.key});
+  const ProfileView({required this.profile, this.isActive = true, super.key});
 
   final UserProfile profile;
+  final bool isActive;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -67,6 +69,11 @@ class ProfileView extends ConsumerWidget {
                   ),
                 ),
               ],
+              if (profile.isDriver && profile.can(AppPermissions.viewShifts))
+                DriverLunchSection(
+                  canUpdate: profile.can(AppPermissions.updateOwnDriverStatus),
+                  isActive: isActive,
+                ),
               const SizedBox(height: AppSpacing.xl),
               const _SectionHeading(
                 icon: Icons.badge_outlined,

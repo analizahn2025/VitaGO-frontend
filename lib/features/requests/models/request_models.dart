@@ -72,6 +72,7 @@ class ServiceRequestSummary {
     this.closureReason,
     this.pendingReassignment = false,
     this.tubeCount,
+    this.flaskCount,
   });
 
   factory ServiceRequestSummary.fromJson(Map<String, dynamic> json) {
@@ -83,6 +84,7 @@ class ServiceRequestSummary {
       branchId: optionalString(json, 'sucursal_id'),
       requestedById: requireString(json, 'solicitada_por_id'),
       tubeCount: nullableInt(json, 'cantidad_tubos'),
+      flaskCount: nullableInt(json, 'cantidad_frascos'),
       assignedDriverId: optionalString(json, 'repartidor_asignado_id'),
       priority: requireString(json, 'prioridad'),
       modality: requireString(json, 'modalidad'),
@@ -110,6 +112,7 @@ class ServiceRequestSummary {
   final String? branchId;
   final String requestedById;
   final int? tubeCount;
+  final int? flaskCount;
   final String? assignedDriverId;
   final String priority;
   final String modality;
@@ -163,8 +166,8 @@ class ServiceRequestDetail {
       summary: ServiceRequestSummary.fromJson(json),
       notes: optionalString(json, 'notas'),
       items: jsonMapList(
-        json['articulos'],
-        'articulos',
+        json['articulos_historicos'] ?? json['articulos'],
+        'articulos_historicos',
       ).map(RequestArticle.fromJson).toList(growable: false),
       events: jsonMapList(
         json['eventos'],
@@ -196,6 +199,7 @@ class ServiceRequestDetail {
   final ServiceRequestSummary summary;
   final String? notes;
   final List<RequestArticle> items;
+  List<RequestArticle> get historicalArticles => items;
   final List<RequestEvent> events;
   final List<RequestAssignment> assignments;
   final DateTime? assignedAt;

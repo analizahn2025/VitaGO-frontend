@@ -22,11 +22,12 @@ import 'package:vitago_app/features/organizations/services/organizations_api_ser
 import 'package:vitago_app/features/fleet/widgets/driver_tube_load.dart';
 import 'package:vitago_app/features/profile/models/user_profile.dart';
 import 'package:vitago_app/features/requests/models/request_models.dart';
+import 'package:vitago_app/features/requests/models/request_inputs.dart';
 import 'package:vitago_app/features/requests/providers/requests_providers.dart';
 import 'package:vitago_app/features/requests/repositories/requests_repository_impl.dart';
 import 'package:vitago_app/features/requests/views/assign_request_view.dart';
+import 'package:vitago_app/features/requests/views/update_request_load_view.dart';
 import 'package:vitago_app/features/requests/services/requests_api_service.dart';
-import 'package:vitago_app/features/requests/views/update_request_tube_count_view.dart';
 
 void main() {
   for (final mode in AppMode.values) {
@@ -84,10 +85,13 @@ void main() {
         );
         await tester.pumpAndSettle();
         expect(calls.single.queryParameters['cantidad_tubos'], 2);
+        expect(calls.single.queryParameters['cantidad_frascos'], 0);
         expect(calls.single.queryParameters.containsKey('empresa_id'), isFalse);
         await tester.tap(find.byType(DropdownButtonFormField<String>));
         await tester.pumpAndSettle();
-        await tester.tap(find.text('Motorista Prueba · 2 tubos libres').last);
+        await tester.tap(
+          find.text('Motorista Prueba · 2 tubos · 20 frascos libres').last,
+        );
         await tester.pumpAndSettle();
         final button = find.widgetWithText(FilledButton, 'Asignar motorista');
         await tester.ensureVisible(button);
@@ -183,6 +187,8 @@ void main() {
         'tamano_pagina': 100,
         'cantidad_tubos': 2,
       });
+      await fleet.getAvailableDrivers(tubeCount: 0, flaskCount: 3);
+      expect(calls.last.queryParameters['cantidad_frascos'], 3);
       await OrganizationsApiService(client).updateDriverLimits(
         'company',
         const UpdateDriverLimitsInput(
@@ -202,8 +208,22 @@ void main() {
       final detail = await RequestsApiService(client)
           .updateTubeCount('request', 3, ' Conteo real ');
       expect(detail.summary.tubeCount, 3);
-      expect(calls.last.path, 'solicitudes/request/cantidad-tubos/');
+      expect(calls.last.path, 'solicitudes/request/carga/');
       expect(calls.last.data, {'cantidad_tubos': 3, 'motivo': 'Conteo real'});
+      await RequestsApiService(client).updateLoad(
+        'request',
+        const UpdateRequestLoadInput(
+          tubeCount: 0,
+          flaskCount: 4,
+          reason: 'Conteo de frascos',
+        ),
+      );
+      expect(calls.last.path, 'solicitudes/request/carga/');
+      expect(calls.last.data, {
+        'cantidad_tubos': 0,
+        'cantidad_frascos': 4,
+        'motivo': 'Conteo de frascos',
+      });
     },
   );
 
@@ -286,7 +306,7 @@ void main() {
       'AT_PICKUP',
     ]) {
       expect(
-        canUpdateRequestTubeCount(
+        canUpdateRequestLoad(
           ServiceRequestDetail.fromJson(_request(3, status: status)),
           admin,
         ),
@@ -295,14 +315,14 @@ void main() {
     }
     for (final status in ['PICKED_UP', 'IN_TRANSIT', 'AT_DESTINATION']) {
       expect(
-        canUpdateRequestTubeCount(
+        canUpdateRequestLoad(
           ServiceRequestDetail.fromJson(_request(null, status: status)),
           admin,
         ),
         isTrue,
       );
       expect(
-        canUpdateRequestTubeCount(
+        canUpdateRequestLoad(
           ServiceRequestDetail.fromJson(_request(3, status: status)),
           admin,
         ),
@@ -310,14 +330,14 @@ void main() {
       );
     }
     expect(
-      canUpdateRequestTubeCount(
+      canUpdateRequestLoad(
         ServiceRequestDetail.fromJson(_request(null, status: 'DELIVERED')),
         admin,
       ),
       isFalse,
     );
     expect(
-      canUpdateRequestTubeCount(
+      canUpdateRequestLoad(
         ServiceRequestDetail.fromJson(_request(null)),
         _profile([]),
       ),
@@ -506,6 +526,12 @@ Map<String, dynamic> _driver() => {
   'tubos_reservados': 18,
   'tubos_disponibles': 2,
   'solicitudes_sin_cantidad_tubos': 0,
+  'limite_frascos': 20,
+  'frascos_comprometidos': 0,
+  'frascos_en_transporte': 0,
+  'frascos_reservados': 0,
+  'frascos_disponibles': 20,
+  'solicitudes_sin_cantidad_frascos': 0,
   'creado_en': '2026-10-27T12:00:00Z',
   'actualizado_en': '2026-10-27T12:00:00Z',
 };
@@ -515,6 +541,7 @@ Map<String, dynamic> _request(int? tubes, {String status = 'PENDING'}) => {
   'empresa_id': 'company',
   'solicitada_por_id': 'user',
   'cantidad_tubos': tubes,
+  'cantidad_frascos': 0,
   'prioridad': 'NORMAL',
   'modalidad': 'ENTRE_SUCURSALES',
   'tipo_servicio': {'id': 'type', 'codigo': 'MUESTRAS', 'nombre': 'Muestras'},

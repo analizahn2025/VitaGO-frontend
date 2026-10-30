@@ -73,6 +73,7 @@ class DeliveryRequestTile extends StatelessWidget {
                 ],
                 const SizedBox(height: AppSpacing.sm),
                 Text('Tubos: ${request.tubeCount ?? 'Sin declarar'}'),
+                Text('Frascos: ${request.flaskCount ?? 'No registrado'}'),
                 const SizedBox(height: AppSpacing.xs),
                 _RouteLine(icon: Icons.trip_origin, value: request.origin.name),
                 const SizedBox(height: AppSpacing.xs),
