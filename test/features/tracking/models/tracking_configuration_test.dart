@@ -3,6 +3,57 @@ import 'package:vitago_app/features/tracking/models/tracking_configuration.dart'
 
 void main() {
   test(
+    'lee la autorización de GPS de la jornada sin depender de servicios',
+    () {
+      final configuration = TrackingConfiguration.fromJson({
+        ..._configurationJson,
+        'seguimiento_jornada': {
+          'captura_habilitada': true,
+          'jornada_id': 'shift-id',
+          'cierre_programado_en': '2026-10-31T04:00:00+00:00',
+          'requiere_servicio_activo': false,
+          'incluye_tiempo_sin_servicios': true,
+          'incluye_almuerzo': true,
+          'detener_al_finalizar_jornada': true,
+        },
+      });
+      final policy = configuration.shiftTracking!;
+      expect(policy.permitsCaptureFor('shift-id'), isTrue);
+      expect(policy.permitsCaptureFor('another-shift'), isFalse);
+      expect(policy.requiresActiveService, isFalse);
+      expect(policy.includesTimeWithoutServices, isTrue);
+      expect(policy.includesLunch, isTrue);
+      expect(policy.scheduledCloseAt, DateTime.utc(2026, 10, 31, 4));
+    },
+  );
+
+  test(
+    'sin jornada no autoriza capturas y acepta la configuración antigua',
+    () {
+      final configuration = TrackingConfiguration.fromJson({
+        ..._configurationJson,
+        'seguimiento_jornada': {
+          'captura_habilitada': false,
+          'jornada_id': null,
+          'cierre_programado_en': null,
+          'requiere_servicio_activo': false,
+          'incluye_tiempo_sin_servicios': true,
+          'incluye_almuerzo': true,
+          'detener_al_finalizar_jornada': true,
+        },
+      });
+      expect(
+        configuration.shiftTracking!.permitsCaptureFor('shift-id'),
+        isFalse,
+      );
+      expect(
+        TrackingConfiguration.fromJson(_configurationJson).shiftTracking,
+        isNull,
+      );
+    },
+  );
+
+  test(
     'lee configuración de llegada sin calcular geocercas en el teléfono',
     () {
       final config = TrackingConfiguration.fromJson({

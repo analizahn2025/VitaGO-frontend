@@ -18,6 +18,8 @@ class OperationalEvidence {
     this.requestStatus,
     this.temperatureC,
     this.temperatureSource,
+    this.imageExpiresAt,
+    this.imageDeletedAt,
   });
 
   factory OperationalEvidence.fromJson(Map<String, dynamic> json) {
@@ -37,6 +39,8 @@ class OperationalEvidence {
       capturedAt: requireDateTime(json, 'capturada_en'),
       notes: optionalString(json, 'notas'),
       fileAvailable: optionalBool(json, 'archivo_disponible'),
+      imageExpiresAt: optionalDateTime(json, 'imagen_expira_en'),
+      imageDeletedAt: optionalDateTime(json, 'imagen_eliminada_en'),
       createdAt: requireDateTime(json, 'creado_en'),
     );
   }
@@ -56,7 +60,14 @@ class OperationalEvidence {
   final DateTime capturedAt;
   final String? notes;
   final bool fileAvailable;
+  final DateTime? imageExpiresAt;
+  final DateTime? imageDeletedAt;
   final DateTime createdAt;
+
+  bool removedByRetentionAt(DateTime now) =>
+      !fileAvailable &&
+      (imageDeletedAt != null ||
+          (imageExpiresAt != null && !now.isBefore(imageExpiresAt!)));
 }
 
 class EvidenceUploadInput {

@@ -4,6 +4,7 @@ import 'package:vitago_app/app/theme/app_design_tokens.dart';
 import 'package:vitago_app/core/formatters/app_date_format.dart';
 import 'package:vitago_app/features/evidence/controllers/evidence_controller.dart';
 import 'package:vitago_app/features/evidence/views/evidence_image_view.dart';
+import 'package:vitago_app/features/evidence/views/evidence_availability_text.dart';
 
 class IncidentEvidenceSection extends ConsumerWidget {
   const IncidentEvidenceSection({required this.incidentId, super.key});
@@ -46,7 +47,8 @@ class IncidentEvidenceSection extends ConsumerWidget {
                   leading: const Icon(Icons.image_outlined),
                   title: Text(item.notes ?? 'Evidencia fotográfica'),
                   subtitle: Text(
-                    'Registrada · ${AppDateFormat.dateTime(item.capturedAt)}',
+                    'Registrada · ${AppDateFormat.dateTime(item.capturedAt)}'
+                    '\n${evidenceAvailabilityText(item, DateTime.now())}',
                   ),
                   trailing: item.fileAvailable
                       ? const Icon(Icons.open_in_new)

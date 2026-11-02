@@ -18,29 +18,59 @@ El código del backend sigue siendo la fuente técnica definitiva. Este archivo
 es la referencia de integración para el frontend y solo presenta como
 **disponibles** las funciones que ya están implementadas.
 
-Última actualización: **2026-10-30**.
+Última actualización: **2026-10-31**.
 
-Contrato vigente: **0.44.0**. La sección 0.44 sustituye las instrucciones
-anteriores de creación con artículos y de tubos obligatoriamente positivos.
-La sección 0.43 define la espera temporal durante la recuperación operativa.
+Contrato vigente: **0.46.0**.
 
-Actualización **0.42.0**: jornada diaria hasta las 22:00 y almuerzo del motorista.
-La versión 0.41.0 incorporó cupos compartidos por empresa en Corporate o por toda
-la red en Network, aplicados individualmente a cada motorista. Se retira la
-edición de límites por perfil. Reportes administrativos0.40.0 por fecha/zona del
-servidor, con carga actual separada, kilómetros por cierre y lecturas paginadas.
-Render conserva su URL; publicación y migración externa pendientes del backend.
+Estado de integración frontend (2026-11-02): el mapa administrativo 0.45 está
+integrado solo en web; Flutter envía GPS durante la jornada usando
+`seguimiento_jornada`. El frontend móvil y el panel web conservan la carga
+multipart de fotos y muestran la retención y el HTTP 410 de la sección 0.46.
+La publicación del código backend 0.46 en Render se verifica por separado.
 
-Actualización **0.39.0**: cantidad_tubos obligatoria por solicitud; límite/carga
-de tubos por motorista y filtrado de disponibles por cantidad. FOTO_RECOLECCION
-requiere temperatura_contenedor_c manual en el mismo multipart. Históricos
-conservan null; se añade regularización administrativa, sin alterar el plan
-automático 0.38.0 ni habilitar la creación pública Network. Ver sección final.
+Actualización **0.46.0**: fotografías de evidencias guardadas como Base64 en
+PostgreSQL. El transporte HTTP conserva multipart y descarga binaria privada.
+Retención automática por meses naturales: conserva mes actual y anterior;
+noviembre elimina septiembre y anteriores. Añade `imagen_expira_en` y
+`imagen_eliminada_en`; imagen vencida responde410. Migraciones aplicadas local
+y en línea. Ver sección 0.46.0 para importación anterior y publicación pendiente.
 
-Actualización **0.38.0**: el backend ordena por paradas cercanas y puede intercalar
-recolecciones/entregas de distintos envíos. Una foto de recolección201 puede
-dejar PICKED_UP o IN_TRANSIT; seguir siempre flujo_actual y el orden de paradas.
-Sin DTO nuevos ni cálculos automáticos Google. Ver sección final e integración.
+Actualización **0.45.0**: seguimiento administrativo durante toda la jornada
+vigente, incluso sin solicitudes o durante almuerzo. Nuevo GET
+`seguimiento/motoristas/`, paginado y protegido por `repartidor.ver_ubicacion`.
+Configuración GPS añade `seguimiento_jornada` para mantener captura/envío sin
+servicio. Sin migración. Integración móvil/web pendiente; ver sección 0.45.0.
+
+Actualización **0.44.0**: solicitudes con tubos y frascos, cupos independientes
+configurables por administración y retiro de artículos del alta. Nuevos
+`cantidad_frascos`, `limite_frascos`, carga/resúmenes/rutas ampliados y PATCH
+`solicitudes/{id}/carga/`. `articulos` deja de aceptarse y los registros previos
+se leen como `articulos_historicos`. Sustituye los ejemplos antiguos de alta con
+artículos. Dos migraciones aplicadas en las bases locales y en Corporate
+externo, sin pendientes. El usuario confirmó20frascos iniciales y cupos independientes,
+ajustables por administración.
+
+Actualización **0.43.0**: recuperación automática de cierres al arrancar WSGI/ASGI
+y antes de atender la API tras inactividad, para Corporate y Network. Cierra
+operaciones vencidas con su corte efectivo22:00 y verifica que no queden jornadas
+atrasadas. Si la recuperación falla o queda incompleta, responde503 temporal con
+código y Retry-After. Sin otra migración ni cambios de payload normal. Código
+preparado localmente; requiere publicarse en Render para activar este mecanismo.
+
+Actualización **0.42.0**: Corporate y Network cierran jornadas y servicios
+incompletos a las22:00 de su zona operativa. Una sola jornada por motorista y
+día, aunque se cierre antes. Almuerzo manual sin trabajos pendientes, regreso
+sobre la misma jornada y filtro administrativo. Nuevos endpoints y JSON en la
+sección0.42.0 al final. Migración aplicada en ambas bases locales y en Corporate
+externo, con autorización el29/octubre. La tarea periódica en Render sigue sin
+configurarse en este trabajo; verificar por separado el despliegue del código.
+
+Actualización **0.41.0**: configuración de cupos compartida, aplicada al cupo
+individual de cada motorista. Corporate configura por empresa; Network usa una
+configuración general para todas sus empresas. Se retira PATCH de límites por
+motorista. Perfiles/listados/resúmenes conservan los campos calculados. Nuevos
+GET/PATCH y entrega exacta al frontend en la sección0.41.0 al final. Migración
+aplicada en ambas bases locales y en la base externa Corporate.
 
 Actualización **0.37.0**: ENTRE_SUCURSALES de Corporate permite distintas ciudades
 y municipios del mismo país/departamento y empresa, sin límite adicional de km.
@@ -62,23 +92,11 @@ en la misma transacción. Evidencias añaden `estado_solicitud`. Solo el siguien
 servicio se activa con jornada/GPS válidos. Sustituye los selectores y las
 confirmaciones adicionales anteriores. Ver contrato y entrega a Flutter al final.
 
-Integración de este frontend (0.36.0): se consume `flujo_actual` para abrir
-mapa/foto/finalización especial o volver a espera, sin seleccionar etapas.
-Una foto operativa201 nunca envía otra transición: refresca estado y ruta.
-Ante respuesta perdida se verifica detalle/ruta/evidencias antes de habilitar
-un reenvío manual. Los manifiestos especiales se conservan por servidor y
-motorista para confirmarlos al cerrar el movimiento y recuperar conexión.
-
 Actualización **0.35.0**: orden estable por cercanía GPS aproximada en el backend,
 por servicios completos. `orden_tipo=CERCANIA_GPS`; no cambiar el orden en Flutter.
 Respeta servicio iniciado y exclusividad. Se planifica al agregar/retirar servicios,
 no en cada GPS/GET. Sin GPS válido conserva lo guardado y anexa nuevos por antigüedad.
 Sin nuevas APIs Google, migraciones ni cambios de conexión. Ver sección final.
-
-Integración de este frontend (0.35.0): acepta `CERCANIA_GPS` y el histórico
-`ASIGNACION`, conserva el orden recibido y la selección por IDs. La tarjeta
-describe «el orden de tu ruta», sin afirmar antigüedad, optimización vial o ETA.
-La estrategia configurada no garantiza que hubiera GPS al planificar.
 
 Actualización **0.34.0**: cálculo inicial con geometría separada por envío y
 parada. `ruta_vial` añade `tramos`, `tramo_actual_id` y disponibilidad del
@@ -86,46 +104,18 @@ desglose para dibujar una sola línea. Cambiar la selección es visual, no cambi
 el orden ni dispara cálculos. El trazado global se conserva solo por compatibilidad.
 Ver «Un envío y un tramo a la vez» al final, con contrato y entrega a Flutter.
 
-Integración de este frontend (0.34.0, actualizada por 0.36.0): una sola polilínea
-del tramo indicado por el flujo, sin selectores y sin recuperar la línea global.
-La caché anterior sin desglose conserva actualización manual con confirmación,
-versión vigente y `reintentar=true`; no se calcula automáticamente por GPS o etapa.
-
 Actualización **0.33.0**: avisos diarios por la zona operativa del servidor
 (`TIME_ZONE`, localmente `America/Tegucigalpa`). Desde las 00:00, listado y
 conteo excluyen días anteriores incluso si se retrasa el archivado. Tareas
 independientes Corporate/Network archivan sin borrar historial, con recuperación.
 Los endpoints y JSON no cambian. Ver «Avisos diarios y archivado recuperable».
 
-Integración de este frontend (0.33.0): la campana consulta listado y conteo
-al abrirse, reanudar y recuperar sincronización GPS tras un fallo. En primer
-plano consulta cada minuto para recoger el corte del servidor, sin calcular
-vigencia con la fecha del teléfono. El panel se actualiza en vivo, reemplaza
-los datos anteriores y retira IDs con `404` sin reintentarlos ni navegar a ellos.
-Las alertas locales sobre problemas operativos vigentes se conservan.
-
-Presentación de campana: el número representa avisos **nuevos no vistos** en
-este dispositivo, no todas las notificaciones pendientes de lectura del API.
-Abrir la campana quita el número y conserva los avisos, incluidos los leídos.
-La marca local se persiste por cuenta y servidor usando IDs y fechas recibidas
-del servidor; no se inventa una fecha del teléfono ni se marca cada aviso leído.
-`conteo_no_leidas` mantiene su significado HTTP original. Esta marca local no
-se sincroniza con otros dispositivos y no cambia la política diaria del backend.
-
 Actualización **0.32.0**: llegada automática por GPS a la próxima parada,
 sin consultas Google. `POST seguimiento/registros/` añade `llegadas_detectadas`;
 `GET rutas/mi-ruta/` añade `llegada_actual` para recuperar la pantalla tras
-reanudar. Las llegadas manuales con coordenadas dejan de ser acciones Flutter.
-Desde 0.36.0 enviar la foto válida es la confirmación de recolección/entrega;
-Flutter no debe enviar una segunda transición después.
-
-Integración de este frontend (0.32.0): se consumen los eventos y se recupera
-`llegada_actual` al iniciar, reanudar o recuperar conexión. La confirmación usa
-los formularios existentes sobre la pantalla actual, sin cerrar el mapa ni
-interrumpir otro formulario. El historial de `evento_id` mostrado se persiste
-por cuenta y servidor. Solo se presenta la próxima parada y asignación vigentes;
-los destinos especiales sin coordenadas conservan llegada manual. No se detectan
-geocercas en el teléfono ni se llama a Google para las llegadas.
+reanudar. Flutter debe ocultar las llegadas manuales con coordenadas y abrir
+la pantalla indicada al recibir un evento nuevo. La foto y la confirmación
+de recolección/entrega siguen siendo obligatorias. Ver sección final.
 
 Actualización **0.31.0**: resumen de entregas del día por `entregada_en`, fecha
 operativa en Tegucigalpa y entregas recientes diarias, sin cambiar los acumulados.
@@ -134,20 +124,6 @@ sesión). Pérdida de rol operativo recupera servicios; disponibilidad exige rol
 vigente. Corte diario aplicado también al cierre manual tardío y cálculo vial.
 GPS añade diagnóstico de captura y recomienda 15 segundos detenido, manteniendo
 5 en movimiento, envío 20 y umbral de medición 30. Ver detalles al final.
-
-Integración de este frontend: Inicio de administrador y solicitante muestra
-«Resumen de envíos»: Pendientes usa `pendientes`, En progreso usa `activas`
-y Entregadas hoy usa `entregadas_del_dia`. Solo las entregas están limitadas
-al día; pendientes y en progreso reflejan la carga visible en esos estados.
-La sección diaria usa también `entregas_recientes_del_dia`,
-`fecha_operativa` y `zona_horaria_operativa`. Los acumulados no se muestran
-como datos diarios. Se consulta el día del servidor al volver a Inicio,
-reanudar la app y cada minuto mientras Inicio está activo. Las entregas
-recientes muestran `entregada_en` en la zona recibida; «Ver solicitudes»
-conserva el acceso al listado general. Captura GPS aplica la configuración
-5/15 segundos y admite el diagnóstico opcional, conservando cola persistente
-y reloj monotónico. La continuidad física con pantalla apagada requiere
-validación en el dispositivo.
 
 Estado operativo **0.30.4, 2026-10-22**: Routes API habilitada únicamente en
 Corporate, después de instalar la limpieza horaria y al iniciar sesión.
@@ -175,8 +151,7 @@ Contrato **0.30.0**: la hora oficial de evidencias y reportes de incidencias
 la asigna el servidor. `capturada_en`/`reportada_en` dejan de ser entradas
 obligatorias: se ignora cualquier valor del cliente y se conservan en respuesta.
 Configuración GPS añade `hora_servidor` y `zona_horaria_operativa` para anclaje
-monotónico del móvil. La integración correspondiente ya está implementada en
-este frontend. Ver sección «Reloj oficial».
+monotónico del móvil, todavía pendiente en frontend. Ver sección «Reloj oficial».
 
 Corrección **0.29.4**: el resumen de jornada cuenta la entrega que coincide
 exactamente con el cierre exitoso de su asignación. No cambia el contrato
@@ -234,21 +209,17 @@ ni cambia conexiones; el mapa móvil y su clave SDK corresponden al frontend.
 ## 2. Historial de cambios
 
 | Versión | Fecha | Cambio |
-| 0.42.0 | 2026-10-29 | Una jornada por día, corte operativo a las 22:00, almuerzo del motorista y filtro administrativo. Código/migración/programador externos pendientes en Render. |
 |---|---|---|
-| 0.41.0 | 2026-10-28 | Cupos por empresa Corporate o generales Network, manteniendo cupo individual y retirando PATCH de límites por motorista. Configuración auditada, con permisos de alcance completo. 741 pruebas backend aprobadas y24 PostgreSQL omitidas; migración local aplicada y externa pendiente. |
-| 0.40.2 | 2026-10-27 | CORS por origen web explícito para API v1; dominio Render y origen Vercel configurados, JWT/móvil conservados. 723 pruebas backend aprobadas y22 PostgreSQL omitidas; publicación pendiente según reporte del backend. |
-| 0.40.1 | 2026-10-27 | Corporate de pruebas en Render con autenticación LOCAL mediante ENTORNO=PRUEBAS. Se conserva HTTPS y contrato HTTP. Diagnóstico de500 y corrección de base externa documentados por backend, sin cambios de URL móvil. |
-| 0.40.0 | 2026-10-27 | Reportes administrativos por motorista: resumen diario listado/detalle y temperaturas paginadas, con alcances estrictos, fechas del servidor y kilómetros por cierre. 704 pruebas backend aprobadas y22 PostgreSQL omitidas. |
-| 0.39.0 | 2026-10-27 | Cantidad de tubos obligatoria; reserva y cupo por motorista, límite administrativo, regularización histórica y temperatura manual con foto de recolección. Ambos modos, manteniendo cinco solicitudes y el flujo 0.38.0. 670 pruebas backend aprobadas y 22 PostgreSQL omitidas; migraciones aplicadas por backend. |
-| 0.38.0 | 2026-10-26 | Plan por paradas cercanas, intercalando solicitudes normales con precedencia de recolección. Foto201 puede devolver PICKED_UP o IN_TRANSIT; la siguiente parada se activa en backend. Prioritario y especial conservan sus reglas. 644 pruebas backend aprobadas y 21 PostgreSQL omitidas; sin migraciones ni cambios de conexión. |
+| 0.41.0 | 2026-10-28 | Límites por empresa en Corporate y generales de Network, con cupo individual, configuración auditada y edición individual retirada. 741 pruebas aprobadas/24 PG omitidas; migración aplicada localmente. |
+| 0.40.2 | 2026-10-27 | CORS por origen web explícito para API v1; dominio Render y origen Vercel configurados, JWT/móvil conservados. 723 pruebas aprobadas/22 PG omitidas; pendiente publicar/desplegar código. |
+| 0.40.1 | 2026-10-27 | Arranque de Corporate con login propio en Render mediante ENTORNO=PRUEBAS, conservando seguridad de producción. Sin cambios de endpoints/JSON; variables y comandos en README. Base externa aún sin preparar/verificar. |
 | 0.37.0 | 2026-10-26 | Corporate ENTRE_SUCURSALES por misma empresa/país/departamento, admitiendo otras ciudades/municipios y viajes largos. Flota Corporate exclusiva por empresa; candidatos Network globales entre clientes, sin mezclar visibilidad. 25 regresiones;624 aprobadas/21 PG omitidas. Sin migraciones/red/datos alterados. |
 | 0.36.1 | 2026-10-26 | Solo carga de datos: 34 sucursales/ubicaciones y 34 cuentas limitadas a su sucursal en Analiza Corporate; coordenadas normalizadas no verificadas. Se conservan dos sucursales de prueba. Sin cambios HTTP/lógica/red; 34 credenciales y 34 opciones de creación comprobadas. |
-| 0.36.0 | 2026-10-26 | Flujo automático: activa solo el vigente, GPS acredita llegada, foto válida completa etapa y activa siguiente. Mi-ruta añade flujo_actual; evidencia añade estado_solicitud. Sin aceptación/selección de etapa; especial sin destino conserva señal manual. Sin migraciones/Google. 599 pruebas backend aprobadas y 21 PostgreSQL omitidas. |
-| 0.35.0 | 2026-10-23 | Orden CERCANIA_GPS calculado en el backend y guardado por servicio completo; mantiene servicio en curso, prioritarios/especiales y respaldo sin GPS. GET/GPS no reorganizan ni llaman a Google. 26 pruebas backend nuevas; 568 aprobadas y 21 PostgreSQL omitidas. Sin migraciones. |
-| 0.34.0 | 2026-10-23 | Polilíneas por envío/parada en una única consulta inicial; tramos pendientes, tramo actual y selección visual sin alterar orden. Cálculo anterior sin desglose solo se actualiza explícitamente y con presupuesto. Geometrías comparten TTL/limpieza; rutas.0003 aplicada en ambas bases por backend. 542 pruebas backend aprobadas y 21 PG omitidas. |
-| 0.33.0 | 2026-10-23 | Avisos del día del servidor: listado/conteo excluyen días anteriores desde medianoche sin depender de tarea ni teléfono. Archivado recuperable sin borrar historial ni tocar operación. Migración notificaciones.0003 aplicada en ambas bases; tareas nuevas independientes. 520 pruebas backend aprobadas y 21 PG omitidas. |
-| 0.32.0 | 2026-10-23 | Llegada automática por GPS a la próxima parada, auditada y sin completar el servicio. Nuevos campos `llegadas_detectadas`/`llegada_actual` y configuración de geocerca. Llegadas manuales con coordenadas rechazadas; destino especial sin coordenadas conserva confirmación manual. Reemplazo de motorista que ya llegó continúa IN_TRANSIT y acredita su propia llegada. Sin migraciones ni consultas Google. |
+| 0.36.0 | 2026-10-26 | Flujo automático: activa solo el vigente, GPS acredita llegada, foto válida completa etapa y activa siguiente. Mi-ruta añade flujo_actual; evidencia añade estado_solicitud. Sin aceptación/selección de etapa; especial sin destino conserva señal manual. Sin migraciones/Google. 599 pruebas aprobadas y 21 PostgreSQL omitidas. |
+| 0.35.0 | 2026-10-23 | Orden CERCANIA_GPS calculado localmente y guardado por servicio completo; mantiene servicio en curso, prioritarios/especiales y respaldo sin GPS. GET/GPS no reorganizan ni llaman a Google. 26 pruebas nuevas; 568 aprobadas y 21 PostgreSQL omitidas. Sin migraciones. |
+| 0.34.0 | 2026-10-23 | Polilíneas por envío/parada en una única consulta inicial; tramos pendientes, tramo actual y selección visual sin alterar orden. Cálculo anterior sin desglose solo se actualiza explícitamente y con presupuesto. Geometrías comparten TTL/limpieza; rutas.0003 aplicada en ambas bases. 542 pruebas aprobadas y 21 PG omitidas. |
+| 0.33.0 | 2026-10-23 | Avisos del día del servidor: listado/conteo excluyen días anteriores desde medianoche sin depender de tarea ni teléfono. Archivado recuperable sin borrar historial ni tocar operación. Migración notificaciones.0003 aplicada en ambas bases; tareas nuevas independientes. 520 pruebas aprobadas y 21 PG omitidas. |
+| 0.32.0 | 2026-10-23 | Llegada automática por GPS a la próxima parada, auditada y sin completar el servicio. Nuevos campos llegadas_detectadas/llegada_actual y configuración de geocerca. Llegadas manuales con coordenadas rechazadas; destino especial sin coordenadas conserva confirmación manual. Reemplazo de motorista que ya llegó continúa IN_TRANSIT y acredita su propia llegada. Sin migraciones ni consultas Google. |
 | 0.31.0 | 2026-10-22 | Resumen diario de entregas con fecha operativa; diagnóstico GPS; errores seguros; pérdida de rol recupera servicios y excluye disponibilidad; corte diario reforzado en jornada/ruta. Clave Corporate renovada y depuración desactivada. 445 pruebas aprobadas y 21 omitidas por requerir PostgreSQL. Sin migraciones ni cambios de conexión. |
 | 0.30.4 | 2026-10-22 | Routes habilitada solo en Corporate con limpieza Windows horaria y al iniciar sesión, registro propio y protección de entorno. Ocho pruebas nuevas; suite SQLite: 380 aprobadas y 21 omitidas por requerir PostgreSQL. Sin cambios HTTP ni migraciones; sin nuevas consultas Google. |
 | 0.30.3 | 2026-10-21 | Corregido deadlock por referencias de paradas a solicitudes bloqueadas: FOR NO KEY UPDATE en servicios de solicitud, conservando bloqueo de motorista. Catorce escenarios concurrentes nuevos; 393 pruebas aprobadas en PostgreSQL. Sin cambios HTTP, migraciones o conexión. |
@@ -410,14 +381,11 @@ nombre predeterminado del claim es `sub`, aunque es configurable por despliegue.
 | `POST` | `/api/v1/solicitudes/{solicitud_id}/transiciones/` | Ambos | Motorista asignado + `solicitud.actualizar_estado`, o `solicitud.cancelar` para cancelar | `200` |
 | `GET` | `/api/v1/solicitudes/{solicitud_id}/evidencias/` | Ambos | Bearer + visibilidad de solicitud + `evidencia.ver` | `200` |
 | `POST` | `/api/v1/solicitudes/{solicitud_id}/evidencias/` | Ambos | Motorista asignado + `evidencia.crear` | `201` |
-| `GET` | `/api/v1/solicitudes/{solicitud_id}/evidencias/{evidencia_id}/archivo/` | Ambos | Bearer + visibilidad de solicitud + `evidencia.ver` | `200` |
+| `GET` | `/api/v1/solicitudes/{solicitud_id}/evidencias/{evidencia_id}/archivo/` | Ambos | Bearer + visibilidad de solicitud + `evidencia.ver` | `200`; `410` si venció la imagen |
 | `GET` | `/api/v1/vehiculos/` | Ambos | Bearer + `vehiculo.ver` | `200` |
 | `POST` | `/api/v1/vehiculos/` | Ambos | Bearer + `vehiculo.administrar` | `201` |
 | `GET` | `/api/v1/vehiculos/{vehiculo_id}/` | Ambos | Bearer + `vehiculo.ver` en alcance | `200` |
 | `GET` | `/api/v1/repartidores/` | Ambos | Bearer + `repartidor.ver` | `200` |
-| `GET` | `/api/v1/repartidores/resumenes/` | Ambos | Cinco permisos administrativos y alcance completo del motorista; ver0.40.0 | `200` |
-| `GET` | `/api/v1/repartidores/{repartidor_id}/resumen/` | Ambos | Cinco permisos administrativos y alcance completo del motorista; ver0.40.0 | `200` |
-| `GET` | `/api/v1/repartidores/{repartidor_id}/temperaturas/` | Ambos | Cinco permisos administrativos y alcance completo del motorista; ver0.40.0 | `200` |
 | `POST` | `/api/v1/repartidores/` | Ambos | Bearer + `repartidor.administrar` | `201` |
 | `GET` | `/api/v1/repartidores/disponibles/` | Ambos | Bearer + `repartidor.ver` | `200` |
 | `GET` | `/api/v1/repartidores/mi-perfil/` | Ambos | Motorista autenticado con perfil activo | `200` |
@@ -444,7 +412,7 @@ nombre predeterminado del claim es `sub`, aunque es configurable por despliegue.
 | `POST` | `/api/v1/incidencias/{incidencia_id}/revision/` | Ambos | Bearer + `incidencia.revisar` en alcance | `200` |
 | `GET` | `/api/v1/incidencias/{incidencia_id}/evidencias/` | Ambos | Visibilidad de incidencia | `200` |
 | `POST` | `/api/v1/incidencias/{incidencia_id}/evidencias/` | Ambos | Motorista propietario + `evidencia.crear` | `201` |
-| `GET` | `/api/v1/incidencias/{incidencia_id}/evidencias/{evidencia_id}/archivo/` | Ambos | Visibilidad de incidencia | `200` |
+| `GET` | `/api/v1/incidencias/{incidencia_id}/evidencias/{evidencia_id}/archivo/` | Ambos | Visibilidad de incidencia | `200`; `410` si venció la imagen |
 
 ## 6. Respuestas de error
 
@@ -1640,7 +1608,6 @@ Disponible actualmente en Corporate. Ejemplo:
   "origen_id": "2de2d88f-65b5-4e3e-951f-0f6faf8002e3",
   "destino_id": "3c18fa32-7bc2-4743-9744-f22453730413",
   "notas": "Entregar directamente en recepción.",
-  "cantidad_tubos": 2,
   "articulos": [
     {
       "tipo_articulo": "Muestra de laboratorio",
@@ -1677,7 +1644,6 @@ Ejemplo de creación especial:
   "origen_id": "2de2d88f-65b5-4e3e-951f-0f6faf8002e3",
   "destino_id": null,
   "destino_especial": "Entregar documentos en oficinas centrales del proveedor",
-  "cantidad_tubos": 1,
   "notas": null,
   "articulos": [
     {
@@ -1690,8 +1656,6 @@ Ejemplo de creación especial:
 
 Reglas:
 
-- desde0.39.0 requiere cantidad_tubos entera positiva (1 a 2147483647),
-  independiente de articulos[].cantidad; no habilita creación pública Network;
 - requiere al menos un artículo y cada cantidad debe ser mayor que cero;
 - la empresa y sucursal deben estar activas y dentro de
   `solicitud.crear`;
@@ -2620,8 +2584,6 @@ Campos:
 | Campo | Tipo | Obligatorio | Descripción |
 |---|---|---|---|
 | `tipo` | texto | Sí | `FOTO_RECOLECCION`, `FOTO_ENTREGA` o `FOTO_INCIDENCIA`. |
-| `temperatura_contenedor_c` | decimal en °C | Solo FOTO_RECOLECCION desde0.39.0 | Máximo dos decimales, formato ±9999.99; no se admite en entrega/incidencia. |
-| `fuente_temperatura` | texto | Solo lectura | La determina el servidor; Flutter nunca la envía. Históricos pueden devolver null. |
 | `archivo` | archivo | Sí | Imagen JPEG, PNG o WebP, máximo 10 MB por configuración local. |
 | `latitud` | decimal | Sí | Coordenada de captura entre -90 y 90. |
 | `longitud` | decimal | Sí | Coordenada de captura entre -180 y 180. |
@@ -2634,8 +2596,7 @@ una operación asignada y no terminal. El backend comprueba que el tipo declarad
 coincida con la firma básica del archivo.
 
 Desde0.36.0 las dos fotos operativas solo corresponden al **servicio vigente**:
-guardar `FOTO_RECOLECCION` confirma la recolección; desde0.38.0 puede quedar en
-`PICKED_UP` si corresponde otra parada o avanzar automáticamente a `IN_TRANSIT`;
+guardar `FOTO_RECOLECCION` avanza a `IN_TRANSIT`, pasando y auditando `PICKED_UP`;
 `FOTO_ENTREGA` completa `DELIVERED`. La foto y sus cambios de estado se confirman
 juntos o se revierten juntos. La respuesta conserva201 y campos anteriores,
 añadiendo `estado_solicitud`. NO enviar después otro POST de confirmación.
@@ -3301,8 +3262,7 @@ una ruta seleccionada. Sus kilómetros GPS aparecen en
 operación abierta y no usa estas restricciones corporativas.
 
 Para un envío `ESPECIAL`, antes de pasar a `PICKED_UP` debe existir jornada
-activa y foto de recolección con coordenadas; desde 0.36.0 no se envía otra
-transición para recoger o entregar después de esa foto. Al finalizar o
+activa, foto de recolección y coordenadas en la transición. Al finalizar o
 fallar la entrega se requieren también las coordenadas finales y, para
 `DELIVERED`, la foto de entrega. Enviar primero los puntos GPS pendientes:
 el kilometraje especial se congela al cerrar y los puntos tardíos no lo
@@ -5097,10 +5057,10 @@ estados. El destino especial confirmado manualmente indica `fuente=MANUAL`.
 
 La configuración mantiene su URL existente; no se crea otro endpoint de llegada.
 
-### Integración en este frontend
+### Trabajo necesario en Flutter
 
 1. Ocultar los botones de llegada manual cuando la parada tiene coordenadas;
-   desde 0.36.0 retirar también iniciar/confirmar y selectores de etapa. Conservar
+   desde0.36.0 retirar también iniciar/confirmar y selectores de etapa. Conservar
    tomar/enviar foto, incidencias y finalización especial sin destino GPS.
 2. Consumir `llegadas_detectadas` al sincronizar GPS y abrir dentro de la app
    la pantalla `RECOLECCION` o `ENTREGA`, con `solicitud_id` y estado actualizado.
@@ -5112,9 +5072,8 @@ La configuración mantiene su URL existente; no se crea otro endpoint de llegada
    una llegada controlada responde `400` con `estado_destino`; un booleano GPS
    enviado por el cliente no habilita la transición.
 
-La navegación descrita ya está integrada en este frontend. Se conserva el
-contrato del backend, las conexiones y los servicios Google. La verificación
-automatizada no sustituye la prueba de llegada con GPS real en un teléfono.
+El frontend todavía debe implementar esa navegación. No se modifica su código,
+las conexiones, los datos operativos ni los servicios Google con este cambio.
 
 ### Verificación de 0.32.0
 
@@ -5170,8 +5129,7 @@ POST /api/v1/notificaciones/{notificacion_id}/marcar-leida/
 
 El servidor no puede modificar una pantalla desconectada ni su caché física
 mientras el teléfono está apagado. La información correcta se obtiene al
-reconectar. No se añade Firebase/push. El refresco correspondiente ya está
-integrado en este frontend, sin modificar las rutas ni los payloads existentes.
+reconectar. No se añade Firebase/push con este cambio ni se modifica el frontend.
 
 ### Archivado y recuperación del servidor
 
@@ -5250,8 +5208,7 @@ POST /api/v1/rutas/mi-ruta/calcular/
 
 El POST recibe el mismo `{ "version_actual": 1, "reintentar": false }` y
 devuelve `ruta_vial` directamente. En GET, estos campos van en `ruta_vial`.
-No hay endpoint para seleccionar un envío. Desde 0.36.0 Flutter tampoco ofrece
-selección operativa: sigue únicamente `flujo_actual.tramo_id`.
+No hay endpoint para seleccionar un envío: la selección sucede en Flutter.
 
 | Campo nuevo | Tipo | Regla |
 |---|---|---|
@@ -5412,12 +5369,12 @@ La `polilinea_codificada` global sigue disponible solo por compatibilidad.
 2. Desde0.36.0 seguir automáticamente `flujo_actual.tramo_id`, sin selector de
    envío ni de `RECOLECCION`/`ENTREGA`.
 3. Mantener como máximo una polilínea en el mapa: limpiar la anterior y dibujar
-   únicamente `tramos[flujo_actual.tramo_id].polilinea_codificada`, decodificada.
+   únicamente `tramos[tramo_id seleccionado].polilinea_codificada`, decodificada.
 4. Si no hay línea o `sin_desplazamiento=true`, mostrar el punto y el mensaje
    correspondiente, sin rescatar una línea vieja ni hacer otro POST.
 5. Después de completar una etapa o recibir una asignación, refrescar `mi-ruta`.
-   Seguir siempre el nuevo `flujo_actual`, sin conservar una etapa elegida por
-   el usuario ni adelantar acciones de otro servicio.
+   Pasar al tramo actual si terminó/desapareció el seleccionado. Consultar otro
+   envío no envía transiciones ni altera la próxima parada.
 6. Seguir actualizando el marcador mediante GPS y enviando puntos al backend;
    conservar el manejo de `llegadas_detectadas`/`llegada_actual`.
 7. Mantener atribución «Google Maps», aviso de motocicleta y geometría solo en
@@ -5443,8 +5400,7 @@ No se crean ni modifican tareas Windows para este cambio.
 22 pruebas nuevas y suite completa: **563 casos, 542 aprobados, 21 omitidos
 por requerir PostgreSQL**, semilla 3403. check, dry-run de migraciones y
 dependencias correctos. Sin consultas Google reales, sin cambios de claves,
-IP, hosts, puertos o frontend durante el ajuste del backend. La integración
-Flutter se registra por separado al final de esta sección.
+IP, hosts, puertos o frontend. Falta integrar y verificar visualmente Flutter.
 Comprobación real en Corporate, con transacción PostgreSQL READ ONLY y proveedor
 bloqueado: GET mi-ruta200. Su cálculo vigente anterior informa
 requiere_actualizar_desglose=true (un intento previo); no se actualizó ni se
@@ -5465,26 +5421,6 @@ bajo [Apache2.0](https://www.apache.org/licenses/LICENSE-2.0); esa licencia cubr
 solo esos fragmentos, no todo VitaGo. El propietario debe revisar y probar
 seguridad y cumplimiento de las condiciones aplicables. Restricciones de claves:
 [documentación oficial](https://docs.cloud.google.com/api-keys/docs/add-restrictions-api-keys?utm_campaign=gmp_git_agentskills_v1).
-
-### Integración de este frontend (2026-10-23)
-
-Se consumen todos los campos de desglose. Desde 0.36.0 el mapa sigue únicamente
-`flujo_actual.tramo_id`, sin selectores de envío ni de etapa.
-Conserva geometrías reutilizadas de versiones calculadas anteriores cuando
-el backend informa que siguen vigentes; no suma su longitud como GPS real.
-Sin desglose o sin tramo no utiliza la línea global como alternativa.
-
-Las paradas futuras no ofrecen acciones; la próxima parada operativa
-depende del backend. Tras una foto exitosa se refresca
-el servicio y se muestra el tramo actual. Sin servicios se vuelve a espera. La actualización
-de caché anterior requiere confirmación explícita y usa `reintentar=true`.
-No hay nuevos endpoints, recálculos automáticos ni cambios de GPS o conexión.
-
-Se conserva la atribución y el aviso suministrado por el servidor está
-disponible bajo «Información del mapa», sin restituir un aviso permanente.
-El panel automático se verifica en móvil angosto, paisaje, tema oscuro y texto
-ampliado. Las pruebas usan geometrías sintéticas, no consultas Google reales;
-queda pendiente comprobar el renderizado nativo con una ruta real en el teléfono.
 
 ## Orden estable por cercanía GPS (0.35.0, 2026-10-23)
 
@@ -5739,8 +5675,7 @@ sesiones/medición especial existente. No se inventan kilómetros ni un destino.
 `ruta_vial.tramos` conserva geometrías restantes por compatibilidad; el flujo
 nuevo solo dibuja la vigente. No modifica proveedor, navegación giro a giro ni
 cálculo explícito: automatizar etapas NO autoriza consultas/recálculos Google
-automáticos ni cambia presupuestos. El reporte original corresponde al backend;
-la integración móvil vigente se registra a continuación.
+automáticos ni cambia presupuestos. Faltan los cambios móviles: aquí solo backend.
 
 ### Alcance y verificación
 
@@ -5756,39 +5691,6 @@ mi-ruta200, flujoAUTOMATICO, pantallaSIN_SERVICIOS y banderas aceptación/selecc
 false. No había ruta activa ni se crearon datos para forzarla. Esta comprobación
 valida Django/DB directamente, no el servidor HTTP:127.0.0.1:8001 no respondió
 al revisar salud; no se inició/reinició proceso ni se cambió la conexión.
-
-### Integración de este frontend (2026-10-26)
-
-- `DriverRouteFlow` interpreta `flujo_actual`; sin metadatos válidos no presenta
-  inicios normales ni elige una etapa por el estado de Google.
-- El coordinador de navegación abre mapa/foto/finalización especial en primer
-  plano, sin interrumpir otro formulario. Sin servicios regresa a espera.
-  Conserva deduplicación de llegadas por cuenta/servidor y refresca al reanudar,
-  recibir llegadas, avisos nuevos o GPS que recupera una activación pendiente.
-- El mapa solo dibuja el ID vigente del flujo. Se retiró el componente de
-  selectores y la selección por marcador; no se rescata la geometría global.
-- La pantalla de foto usa una acción «Enviar foto y confirmar…». Tras201 solo
-  consulta detalle/ruta/listados; nunca envía PICKED_UP, IN_TRANSIT o DELIVERED.
-  Ante respuesta ambigua verifica detalle/ruta/evidencias. Si no se registró,
-  requiere otra pulsación explícita para reenviar; si avanzó, solo actualiza.
-- Incidencias/fallos autorizados siguen disponibles. El especial conserva
-  Finalizar encargo→AT_DESTINATION y después FOTO_ENTREGA, sin otro DELIVERED.
-  Sus manifiestos GPS se guardan antes de la foto en almacenamiento seguro,
-  aislados por API/motorista, y se confirman al cerrar/recuperar conexión sin
-  borrar su cola original ni reintentar fotografías en segundo plano.
-- No se modificaron backend, puertos, claves, autenticación, presupuestos Google
-  ni frecuencia de captura GPS. Las pruebas simulan servicios, fotos y ubicación;
-  la comprobación física de la cámara/GPS/mapa en el teléfono sigue pendiente.
-
-Los cambios de modelos requieren hot restart (`R` mayúscula) o reinicio completo;
-un hot reload puede conservar instancias anteriores sin los campos nuevos.
-
-Verificación automatizada del frontend: **252 pruebas aprobadas**. Incluye
-entrada automática al mapa, vuelta a espera tras última entrega, foto sin otro
-POST de transición, recuperación de respuesta perdida, GPS apagado, finalización
-especial, ubicación lenta/dobles pulsaciones y persistencia/aislamiento de
-manifiestos. No son pruebas contra el
-backend ni Google reales y no sustituyen la validación en el teléfono.
 
 ## Cobertura departamental y alcance de flotas (0.37.0, 2026-10-26)
 
@@ -5891,23 +5793,6 @@ origen propio y destinos dentro del país/departamento. Kennedy:21 destinos
 (incluye dos sucursales de prueba conservadas); La Lima:5; Danlí:1; San Marcos
 de Colón:2. Solo SL-001 San Lorenzo no tiene otro destino en Valle. No se
 crearon solicitudes, sesiones, GPS ni viajes para esta comprobación.
-
-### Integración de este frontend (0.37.0)
-
-- El formulario explica la cobertura por empresa, país y departamento, admitiendo
-  otras ciudades y municipios. Se retiraron los textos que exigían misma ciudad.
-- El selector ya consulta opciones al cambiar el origen usando ubicacion.id;
-  conserva todos los destinos del API, sin comparar ciudad/municipio ni distancia.
-  Cambiar origen borra el destino seleccionado y sus errores anteriores.
-- Los mensajes de disponibilidad del servidor se muestran como información y
-  mantienen deshabilitada la creación sin destino. Los errores400 de origen_id
-  y destino_id se conservan junto a sus respectivos campos.
-- Se revisó la asignación existente: Corporate limita candidatos a su empresa;
-  Network no envía un filtro de empresa cliente. La disponibilidad y el cupo total
-  los determina el backend. La creación pública Network continúa bloqueada.
-- Se agregaron seis pruebas de interfaz con repositorio simulado: cambio de
-  origen/ubicacion.id, destinos entre ciudades, mensajes vacíos/departamento,
-  errores por campo y bloqueo Network. Todas aprobadas; no consultan bases reales.
 
 ## Datos locales: retirada de sucursales de prueba (2026-10-26)
 
@@ -6059,35 +5944,12 @@ semilla 3802, proveedor Google bloqueado. `check` correcto y
 de IP, hosts, puertos, firewall, .env, claves o tareas. No se modificó el frontend
 ni se crearon viajes, solicitudes, GPS o evidencias de prueba en bases reales.
 
-### Integración de este frontend (0.38.0, 2026-10-26)
-
-- Una recolección201 con estado_solicitud PICKED_UP o IN_TRANSIT se reconoce como
-  completada. Se consulta detalle/mi-ruta y se sigue la operación del nuevo flujo;
-  no se fuerza IN_TRANSIT ni se vuelve a enviar foto o transición.
-- La recuperación de respuesta perdida también acepta PICKED_UP: solo realiza
-  lecturas si la recolección ya se registró. Un fallo al refrescar conserva la
-  fotografía confirmada y vuelve a consultar, sin duplicarla.
-- El modelo y el mapa existentes conservan el orden de paradas y las identifican
-  por solicitud/tipo. Las pruebas verifican A-recolección, B-recolección,
-  B-entrega, A-entrega, con llegada GPS simulada, cuatro fotos y cero cálculos.
-  Las pruebas de geometría mantienen el rechazo de líneas incompatibles, sin
-  reagrupar envíos ni recuperar una polilínea global como alternativa.
-- Se incorporan los reportes del backend sobre sucursales de prueba inactivas y
-  visibilidad administrativa. El formulario usa sus opciones autorizadas;
-  solicitudes históricas no se descartan por estado de sucursal. El listado
-  completo usa solicitudes/ y conserva paginación, empresa y permisos del API.
-- Inicio mantiene Resumen de envíos (Pendientes, En progreso y Entregadas hoy),
-  ya confirmado en el teléfono por el usuario. No presenta el acumulado como
-  entregas diarias ni restringe el resumen a la sucursal de un rol global/empresa.
-- Suite completa del frontend: **270 pruebas aprobadas**; análisis estático sin
-  errores. Las pruebas usan servicios, cámara y GPS simulados. Falta comprobar
-  la secuencia intercalada con solicitudes reales y GPS físico en el teléfono.
-
 ## Cantidad de tubos y temperatura de recolección (0.39.0, 2026-10-27)
 
-**Edición individual sustituida por0.41.0:** los límites se configuran por empresa
-Corporate o para toda la red Network. Los párrafos que describen PATCH por
-motorista son históricos; las cantidades, temperaturas y evidencias siguen vigentes.
+**Configuración individual sustituida por0.41.0:** ya no se modifican límites
+mediante PATCH repartidores/{id}/. Corporate configura por empresa y Network
+para toda la red. La cantidad declarada, temperatura y evidencias de esta sección
+siguen vigentes. Los párrafos sobre editar el límite individual son históricos.
 
 Aplica a **Corporate y Network**, confirmado por el usuario. Etiqueta del
 formulario: **Cantidad de tubos**. El administrador configura un límite para
@@ -6304,43 +6166,6 @@ En recolección pedir Temperatura del contenedor (°C) junto a la foto y enviarl
 en el mismo multipart; conservarla si el POST devuelve400 para poder corregir.
 Aceptar campos de temperatura null en históricos y PICKED_UP tras foto201.
 Seguir el plan automático; no agregar botones para aceptar o elegir etapa.
-
-### Integración de este frontend (0.39.0, 2026-10-27)
-
-- Nueva solicitud pide Cantidad de tubos y envía un entero independiente de los
-  artículos. Valida campo obligatorio, formato entero y rango; no convierte
-  silenciosamente fracciones/negativos pegados en cantidades positivas.
-- Los modelos de solicitud/parada admiten cantidades null y se muestran como
-  Sin declarar en lista, detalle y operación. Las evidencias admiten temperatura
-  y fuente null; su consulta muestra Sin registrar para lecturas históricas.
-- Administración puede declarar/corregir cantidades desde el detalle, con
-  solicitud.asignar y motivo obligatorio. No ofrece cambios de una cantidad
-  conocida ya recogida ni de solicitudes terminales; la regularización histórica
-  sigue validándose en el servidor, incluida su vigencia diaria.
-- Flota y motoristas → Motoristas → Detalle muestra carga y límites efectivos.
-  Desde0.41.0 la edición se realiza en la empresa o en configuración general de
-  Network, con sus permisos propios. Ya no se envía PATCH de límites por motorista.
-- El panel del motorista muestra límite/carga/ocupación de solo lectura. Si hay
-  cantidades desconocidas, identifica las sumas como parciales y la regularización
-  pendiente. Un perfil sin campos nuevos no recibe una carga o límite inventados.
-- La asignación consulta disponibles con cantidad_tubos. Corporate conserva el
-  filtro de empresa y Network los perfiles globales. No se calcula cupo en Flutter;
-  se admite un candidato devuelto con exactamente el espacio necesario. El409
-  conserva repartidor_id y refresca candidatos sin dejar una selección inválida.
-- Recolección solicita Temperatura del contenedor (°C), con hasta dos decimales y
-  normalización coma/punto, en el mismo multipart de foto/GPS. Nunca envía fuente
-  ni temperatura en entrega/incidencia. Un400 del campo permite corregir sin
-  perder la imagen ni la lectura; errores ambiguos conservan la verificación previa.
-  Cada nueva recolección inicia su propio campo vacío, sin rango clínico ni alarmas.
-- Tras201 se sigue flujo_actual, aceptando PICKED_UP/IN_TRANSIT y sin otro POST
-  de transición. Se refresca también el perfil de carga tras la acción operativa.
-  Se mantienen el plan por paradas, el GPS persistente, los permisos y el bloqueo
-  de creación pública Network. No se modificaron backend, red o servicios Google.
-- Verificación del frontend: **284 pruebas aprobadas** y análisis estático sin
-  errores. Incluye multipart, cupo exacto/409 en ambos modos, permisos, null
-  históricos, conservación tras400, validación numérica y pantallas pequeñas.
-  Se usaron respuestas, cámara y GPS simulados; queda pendiente la prueba física
-  de creación, recolección y edición administrativa con el backend real.
 
 ## Resúmenes administrativos por motorista (0.40.0, 2026-10-27)
 
@@ -6667,6 +6492,14 @@ local y arranque WSGI/salud200 sin SQL ni bucles HTTPS. Suite737 casos:715 aprob
 
 ## Límites compartidos de motoristas (0.41.0, 2026-10-28)
 
+Estado de integración actualizado2026-10-28: **migración externa aplicada con
+autorización del usuario**. Código0.41 ya publicado y base vitago_corporativo
+preparada. Columnas/tablas presentes y pendientes0; conteos de35tablas operativas
+sin cambios. APIClient contra esa base en READ ONLY: perfil, empresas, detalle,
+límites y motoristas200. Render público salud/preflight200 con CORS Vercel.
+No se hizo login real ni se crearon sesiones/tokens. Reintentar el flujo web
+con la misma URL y origen; no hubo cambios del frontend ni otro push de código.
+
 ### Regla y alcance
 
 La configuración se hace una sola vez; cada motorista tiene su propio cupo.
@@ -6802,9 +6635,10 @@ sin convertirlos en errores de conexión.
 Migración organizaciones.0003_limites_motoristas_compartidos: dos columnas en
 Empresa y tablas limites_motoristas_red/historial_limites_motoristas. Inicializa
 la configuración20/5, conserva columnas y datos anteriores. Aplicada en ambas
-bases locales con conteos operativos conservados. La base externa vitago_corporativo
-todavía requiere esta migración antes de desplegar el código0.41.0; el prechequeo
-confirma un único paso pendiente y permisos de esquema. No se aplicó DDL externo.
+bases locales con conteos operativos conservados. Posteriormente se aplicó con
+autorización también en vitago_corporativo externa:35conteos intactos, esquema
+verificado, configuración red20/5 y0migraciones pendientes. Ya está preparada
+para el código0.41.0 desplegado.
 
 Verificación:18 regresiones funcionales nuevas y2 pruebas PostgreSQL específicas;
 suite765 casos,741 aprobados/24 omitidos por PostgreSQL,semilla4100,Google bloqueado.
@@ -6813,91 +6647,251 @@ READ ONLY y una comprobación real de lectores/escritor en ambos modos mediante
 SELECT/bloqueos/rollback, conservando valores. Sin cambios de frontend, .env, IP,
 servidores o tareas. No se realizó commit/push ni publicación de secretos.
 
-### Integración de este frontend (0.40.0/0.41.0, 2026-10-28)
+## 0.42.0 — Jornada diaria hasta las 22:00 y almuerzo (2026-10-29)
 
-- Reportes accesibles desde Flota y motoristas y desde el detalle del motorista.
-  Lista, resumen y lecturas usan sus GET dedicados, respetan páginas/inactivos y
-  no envían el usuario conectado como filtro. Se exige la combinación completa de
-  permisos y un alcance de empresa/global suficiente antes de consultar.
-- La fecha inicial se deja vacía para usar el reloj del servidor; al abrir detalle
-  o temperaturas se conserva la fecha y la zona recibidas. El usuario puede elegir
-  fecha, empresa autorizada y estado activo/inactivo. Los errores de fecha no se
-  presentan como conexión. Los hitos no se suman como un total de pedidos únicos.
-- Se separan Actividad del día, Tubos del día, Km de jornadas cerradas,
-  Temperaturas del día y Carga actual. Null no se convierte en cero, los tubos
-  desconocidos se marcan como parciales y el kilometraje muestra consolidación y
-  jornadas sin cierre. Las lecturas mantienen la fuente y no generan alarmas clínicas.
-- Corporate: Empresas → empresa → Cupos de motoristas. Network: Inicio → Cupos
-  de Network para el permiso global correspondiente. La consulta de una empresa
-  Network es de solo lectura; la edición general utiliza la ruta de red.
-- El formulario muestra alcance/valores recibidos, valida tubos positivos y
-  solicitudes1–5, acepta motivo opcional hasta1000 y envía solo límites modificados.
-  Guardar actualiza empresa, motoristas, disponibles, solicitudes, resumen y ruta.
-  Los errores400/403/409 conservan campos y valores propuestos para corregir.
-- Se retiraron la vista y todos los métodos de edición individual de límites por
-  motorista. La carga efectiva del perfil continúa como lectura. Cantidad de
-  tubos, temperatura, evidencias, GPS y flujo automático de paradas se conservan.
-- Se conserva config/corporate.render.json y la URL pública. El frontend no cambia
-  variables privadas, bases, servidores ni migraciones. Según el reporte del
-  backend, antes de probar0.41.0 en Render se debe publicar el código y aplicar
-  organizaciones.0003_limites_motoristas_compartidos en vitago_corporativo externa.
-- Verificación: **310 pruebas frontend aprobadas**; análisis estático sin errores.
-  Se incluyen permisos, endpoints, paginación, fechas, null/cero, campos de error,
-  cupos por alcance y reportes en móvil angosto/paisaje, texto ampliado y tema oscuro.
-  Las pruebas usan respuestas simuladas; no acreditan despliegue ni migración remotos.
-  Requiere hot restart/reinicio completo para cargar los nuevos modelos y pantallas.
+### Reglas vigentes para Corporate y Network
 
-## 0.42.0 — Jornada diaria y almuerzo (2026-10-29)
+- La fecha y hora las establece el servidor. Corporate usa la zona del país
+  de la empresa; Network usa `TIME_ZONE`, configurado mediante
+  `ZONA_HORARIA_PREDETERMINADA`. Para Honduras: `America/Tegucigalpa`.
+- Se inicia como máximo una jornada por motorista y fecha operativa. Finalizar
+  temprano **no permite iniciar otra ese día**. Una jornada puede continuar
+  después del almuerzo sin crearse otra.
+- Desde las22:00 no se permite iniciar jornada, regresar del almuerzo, ponerse
+  disponible/en ruta, asignar servicios ni operar rutas vencidas. Crear una
+  solicitud Corporate después del corte devuelve400 con campo `solicitud`.
+  Se conserva la restricción anterior de creación de solicitudes Network.
+- A las22:00 el mantenimiento cierra servicios incompletos: `PICKUP_FAILED`
+  antes de recoger, `DELIVERY_FAILED` cuando ya se recogieron; `motivo_cierre`
+  vale `FIN_DIA`. Cierra asignaciones, tramos especiales, rutas y jornadas.
+  Preserva evidencias, GPS, solicitudes e historial y no inventa coordenadas.
+- Si el mantenimiento se retrasa o el teléfono está apagado, recupera días
+  pendientes y registra el corte efectivo de las22:00, además de la hora real
+  de ejecución en el evento. Los registros antiguos iniciados después de las
+  nuevas22:00 nunca se cierran antes de su propio inicio. No se recalculan
+  cierres históricos ya finalizados.
+- El backend bloquea operaciones vencidas aunque el mantenimiento todavía no
+  haya cerrado sus filas. Desde0.43.0 hay recuperación previa en el servidor,
+  incluso antes de consultas GET; la vista conserva su función de consulta.
+  Al iniciar una
+  jornada se recuperan primero las operaciones vencidas propias, respetando
+  los bloqueos transaccionales.
+- El archivado diario de avisos conserva su corte independiente de las00:00.
 
-Corporate y Network usan la fecha y hora operativa del servidor. Solo se permite
-una jornada por motorista y fecha operativa, incluso si termina temprano. Desde
-las 22:00 no se puede iniciar ni retomar la jornada, asignar servicios u operar
-rutas vencidas. El cierre del servidor marca los servicios pendientes como
-`PICKUP_FAILED` o `DELIVERY_FAILED` con `motivo_cierre=FIN_DIA`.
+### Almuerzo del motorista
 
-`GET /api/v1/jornadas/activa/` conserva `jornada` (objeto o null) y añade
-`hora_servidor`, `fecha_operativa`, `zona_horaria_operativa`,
-`cierre_programado_en`, `jornada_iniciada_hoy`, `puede_iniciar_jornada` y
-`cierre_pendiente`. La aplicación respeta esos indicadores; una jornada vencida
-pendiente de mantenimiento puede seguir presente con `puede_operar=false`.
-El reloj del teléfono no determina el corte operativo.
+Autenticación Bearer y permiso `repartidor.actualizar_estado`; únicamente el
+dueño de la jornada activa y vigente, con usuario/perfil/rol operativo válidos.
+El administrador consulta el estado; no inicia ni termina almuerzos ajenos.
 
-Los objetos de jornada añaden `fecha_operativa` y `cierre_programado_en`
-(nullable en registros antiguos), `puede_operar`, `en_almuerzo` y `almuerzos`.
-Cada intervalo contiene `id`, `iniciada_en`, `finalizada_en` (nullable),
-`finalizada_por_id` (nullable) y `motivo_cierre`. `puede_operar=false` durante
-almuerzo o jornada vencida; el estado real de la jornada sigue siendo necesario
-para saber si está finalizada.
-
-| Método | Ruta | Cuerpo | Respuesta |
+| Método | Ruta, relativa a `/api/v1/` | Cuerpo | Respuesta |
 |---|---|---|---|
-| POST | `/api/v1/jornadas/{jornada_id}/almuerzo/iniciar/` | `{}` | 200, jornada actualizada |
-| POST | `/api/v1/jornadas/{jornada_id}/almuerzo/finalizar/` | `{}` | 200, jornada actualizada |
+| POST | `jornadas/{jornada_id}/almuerzo/iniciar/` | `{}` | 200, jornada actualizada |
+| POST | `jornadas/{jornada_id}/almuerzo/finalizar/` | `{}` | 200, la misma jornada |
 
-Bearer y `repartidor.actualizar_estado`; solo el dueño de la jornada. Para
-iniciar debe estar `AVAILABLE`, sin trabajos pendientes ni asignaciones o
-movimientos especiales activos. El backend lo pone `PAUSED` y lo excluye de
-asignaciones. El regreso manual antes de las 22:00 lo pone `AVAILABLE` y puede
-activar asignaciones pendientes. No simular regreso con PATCH de estado ni
-abrir otra jornada. Cierre de jornada o cambio autorizado a `OFFLINE` /
-`OUT_OF_SERVICE` cierran el intervalo con su motivo.
+Inicio: motorista `AVAILABLE`, sin solicitudes pendientes asignadas, sin
+ninguno de los seis estados activos, sin asignaciones activas ni movimiento
+especial activo. Un `PENDING` sin asignar en la cola general no lo bloquea.
+El servidor registra el inicio y cambia a `PAUSED`; la capacidad de tubos sigue
+siendo calculada. Los listados de disponibles y la asignación automática/manual
+lo excluyen. El bloqueo del motorista serializa la carrera entre asignar e
+iniciar almuerzo: solo se confirma la acción que siga siendo válida.
 
-Validaciones 400 llegan por campo `almuerzo`, `jornada` o `estado_operativo`;
-también hay 403 sin permiso y 404 para jornada ajena/inexistente. No enviar
-fechas ni parámetros adicionales en estas acciones. Tras cada POST correcto,
-refrescar jornada, perfil, solicitudes y ruta.
+Regreso: el motorista lo marca manualmente antes del corte. Se registra el fin
+con su usuario y motivo `REGRESO`, cambia a `AVAILABLE` y se programa el reintento
+de pendientes existente. No se inicia una jornada adicional ni se levanta el
+almuerzo por login, GPS, mapa o PATCH directo a `AVAILABLE`/`ON_ROUTE`.
 
-`GET /api/v1/repartidores/?en_almuerzo=true|false` admite la paginación y
-filtros existentes. El listado, detalle y perfil propio añaden
-`en_almuerzo: bool` y `almuerzo_iniciado_en: timestamp|null`. El valor `PAUSED`
-por sí solo no significa almuerzo. Administradores pueden consultarlo, pero no
-iniciar/finalizar almuerzos ajenos.
+El cierre manual/automático de la jornada también finaliza un almuerzo abierto
+con motivo `CIERRE_JORNADA`. Cambiar a `OFFLINE`/`OUT_OF_SERVICE` mediante la
+operación autorizada lo cierra con `CAMBIO_ESTADO` y deja trazabilidad; no lo
+convierte en regreso. Se conservan todos los intervalos. No se impone un tiempo
+máximo ni se descuenta el almuerzo de `minutos_activos`, que conserva su cálculo
+anterior de tiempo transcurrido.
 
-El cliente conserva la cola GPS histórica previa al corte. En Render todavía
-faltan publicar el backend 0.42.0, aplicar con autorización la migración
-`jornadas.0004_horario_diario_almuerzos` y configurar por modo el comando
-periódico `cerrar_operaciones_vencidas` cada minuto. El frontend mantiene
-compatibilidad de lectura con respuestas anteriores hasta ese despliegue.
+Errores400 estables, ejemplos JSON exactos:
+
+```json
+{"almuerzo": "No puede iniciar almuerzo mientras tenga trabajos pendientes."}
+```
+
+```json
+{"jornada": "Solo puede iniciar una jornada por día, aunque ya la haya finalizado."}
+```
+
+```json
+{"estado_operativo": "Debe finalizar el almuerzo desde su jornada para volver a estar disponible."}
+```
+
+Sin permiso:403; jornada ajena/inexistente:404. Intentar repetir inicio o
+finalizar sin almuerzo activo devuelve400 con `almuerzo`. Las acciones de
+almuerzo rechazan parámetros adicionales, especialmente fechas del teléfono,
+con400 y el nombre de cada campo enviado. Mostrar el mensaje de validación.
+
+### Campos nuevos de jornada
+
+Todos los endpoints que devuelven `SerializadorJornada` conservan sus campos
+anteriores y añaden los siguientes. Este fragmento muestra solo las adiciones:
+
+```json
+{
+  "fecha_operativa": "2026-10-29",
+  "cierre_programado_en": "2026-10-29T22:00:00-06:00",
+  "puede_operar": false,
+  "en_almuerzo": true,
+  "almuerzos": [
+    {
+      "id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      "iniciada_en": "2026-10-29T12:00:00-06:00",
+      "finalizada_en": null,
+      "finalizada_por_id": null,
+      "motivo_cierre": ""
+    }
+  ]
+}
+```
+
+Después del regreso, el intervalo tiene `finalizada_en`, el UUID del motorista
+en `finalizada_por_id` y `motivo_cierre="REGRESO"`. `en_almuerzo=false` y
+`puede_operar=true` dentro del horario vigente. En un cierre automático, el
+actor es null. `puede_operar` indica jornada vigente fuera del almuerzo; los
+permisos, el estado y el flujo de cada servicio se validan por separado.
+Jornadas históricas finalizadas anteriores a esta versión pueden tener
+`fecha_operativa` y `cierre_programado_en` nulos y `almuerzos=[]`.
+
+`GET /jornadas/activa/` conserva `jornada` (objeto completo anterior o null) y
+añade estas claves superiores:
+
+```json
+{
+  "jornada": null,
+  "hora_servidor": "2026-10-29T08:00:00-06:00",
+  "fecha_operativa": "2026-10-29",
+  "zona_horaria_operativa": "America/Tegucigalpa",
+  "cierre_programado_en": "2026-10-29T22:00:00-06:00",
+  "jornada_iniciada_hoy": false,
+  "puede_iniciar_jornada": true,
+  "cierre_pendiente": false
+}
+```
+
+Si queda una jornada vencida pendiente de mantenimiento, se devuelve en
+`jornada`, con `puede_operar=false`, y `cierre_pendiente=true`. No tratarla como
+operativa. `puede_iniciar_jornada` tiene en cuenta fecha, horario, vehículo,
+estado y permiso; POST siempre vuelve a validar. Al cerrar hoy, esta bandera
+queda false hasta el siguiente día, aunque `jornada` sea null.
+
+### Consulta administrativa de almuerzos
+
+`GET /repartidores/?en_almuerzo=true` usa `repartidor.ver`, la paginación en
+español existente y los mismos alcances por empresa. Se combina con filtros
+anteriores como `empresa_id`. `en_almuerzo=false` filtra el resto. Cada objeto de
+listado, detalle o mi-perfil de motorista conserva sus campos y añade:
+
+```json
+{
+  "en_almuerzo": true,
+  "almuerzo_iniciado_en": "2026-10-29T12:00:00-06:00"
+}
+```
+
+Fuera del almuerzo vigente: false y null. El estado operativo durante almuerzo
+es `PAUSED`; una pausa genérica sin intervalo conserva `en_almuerzo=false`.
+Para el historial de inicio/fin se consulta el detalle autorizado de la jornada.
+No se necesita un permiso nuevo ni alterar el catálogo de roles.
+
+### Entrega exacta para frontend móvil y web
+
+1. Consultar jornada activa y respetar `puede_iniciar_jornada`, `puede_operar`,
+   `cierre_pendiente` y la hora del servidor.
+2. Mostrar «Iniciar almuerzo» sin trabajos pendientes y «Regresé del almuerzo»
+   cuando `en_almuerzo=true`. Enviar POST `{}` a las rutas anteriores.
+3. Tras cada acción, refrescar jornada, perfil, solicitudes y ruta. El regreso
+   puede provocar una asignación automática. No enviar `estado_operativo` para
+   simular el regreso ni crear otra jornada.
+4. En administración, añadir filtro/indicador «En almuerzo» y mostrar la hora
+   `almuerzo_iniciado_en`. Respetar las empresas visibles para el usuario.
+5. Desde las22:00 mostrar jornada terminada/no operativa; los servicios no
+   completados usan los estados fallidos existentes. Mantener sincronización
+   histórica de GPS pendiente anterior al corte mediante el contrato existente.
+
+### Migración, mantenimiento y estado real del despliegue
+
+`jornadas.0004_horario_diario_almuerzos` añade fecha/corte a jornadas y tabla
+`almuerzos_jornada`. Completa metadatos de las jornadas activas anteriores sin
+reabrir cierres ni borrar historia. Restricción única por motorista/fecha para
+las nuevas jornadas y único almuerzo abierto por jornada. Aplicada en ambas
+bases PostgreSQL locales, con los cinco conteos comprobados intactos:
+usuarios, jornadas, solicitudes, GPS y evidencias.
+
+Aplicación externa autorizada el29/octubre mediante «aplicala»: destino
+34.66.87.16:5432/vitago_corporativo, Corporate/public; plan exclusivamente0004.
+Migración confirmada dentro de transacción, con los conteos de37tablas
+existentes idénticos y todas las columnas anteriores de las10jornadas intactas.
+La jornada activa recibió fecha/corte, la tabla de almuerzos está vacía y las
+restricciones e índices fueron verificados. Historial consistente y0migraciones
+pendientes. Cinco GET200 con APIClient y BD externa en READ ONLY para motoristas,
+filtro almuerzo, jornadas, perfil propio y jornada activa; CORS correcto para
+Vercel. No se inició sesión, crearon tokens ni ejecutaron cierres operativos.
+
+Para que el cierre persistido ocurra aunque nadie use la aplicación, el servidor
+debe ejecutar periódicamente (cada minuto) el comando idempotente:
+
+```bash
+# Despliegue Corporate, con sus propias variables y base de datos
+python manage.py cerrar_operaciones_vencidas --settings=config.settings.production --confirmar-corporativo
+
+# Despliegue Network, con sus propias variables y base de datos
+python manage.py cerrar_operaciones_vencidas --settings=config.settings.production --confirmar-network
+```
+
+Solo se acepta la bandera del modo correspondiente. El comando informa conteos
+y termina con error si quedaron fallos, para que puedan reintentarse. La misma
+tarea periódica recupera un cierre interrumpido o retrasado. Los guardas de
+horario no sustituyen esta ejecución en segundo plano.
+
+En Render debe verificarse el despliegue del código0.42 y configurarse el
+programador del lado del servidor. La migración0004 ya está aplicada. Esta
+aplicación SQL no configura ni ejecuta la tarea periódica. No se agregó un hilo de
+fondo a Gunicorn ni se creó un servicio de pago. La tarea Corporate local ya
+existente lee el mismo comando; no se registraron ni modificaron tareas de
+Windows. Network local dispone del comando con `--confirmar-network`.
+
+Verificación:798 casos ejecutados,771 aprobados y27 omitidos porque requieren
+PostgreSQL; semilla4201 y llamadas reales a Google bloqueadas. Incluye30 pruebas
+funcionales nuevas de horario/almuerzo y3 pruebas de concurrencia listas para
+PostgreSQL. Estas3 no se ejecutaron en SQLite; el usuario PostgreSQL local no
+tiene permiso de creación de una base temporal de pruebas. No se prueban carreras
+reales contra las tablas operativas para suplir esa limitación.
+
+`check`, `makemigrations --check --dry-run`, sintaxis y `git diff --check`
+correctos. Cinco GET200 sobre PostgreSQL Corporate local en una transacción
+READ ONLY: motoristas, filtro de almuerzo, jornadas, perfil propio y jornada
+activa. Sin login ni creación de tokens. Datos públicos nuevos presentes;
+no se consumió Google ni se alteró frontend, credenciales o conectividad.
+
+### Incidente y recuperación del30/octubre
+
+El aviso de cierre pendiente provenía de la jornada del28/octubre15:55:39,
+con corte28/octubre22:00, aún activa con SOL-20261028-DF79BAB5 en IN_TRANSIT.
+El GET ya devolvía `cierre_pendiente=true`, `puede_iniciar_jornada=true` y
+`jornada_iniciada_hoy=false`. Era un cierre anterior sin ejecutar: la tarea
+periódica Render sigue pendiente. La migración0004 no ejecuta mantenimiento.
+
+Se recuperó solo ese servicio/jornada en la base externa mediante los servicios
+existentes de vencimiento, respetando la regla confirmada22:00: servicio
+`DELIVERY_FAILED`, motivo `FIN_DIA`, jornada `FINALIZADA` y motorista `OFFLINE`.
+El cierre efectivo corresponde al28/octubre22:00; el evento registra además
+la ejecución real del30/octubre. Conteos de solicitudes/jornadas/GPS/evidencias
+conservados, sin Google ni nueva jornada creada. Consulta posterior READ ONLY:
+`cierre_pendiente=false`, `puede_iniciar_jornada=true`, sin jornada activa.
+
+Frontend: refrescar jornada/perfil/solicitudes; permitir iniciar hoy. Para
+etiquetar un cierre pendiente usar `jornada.fecha_operativa`, ya que la
+`fecha_operativa` superior describe el día actual. Una jornada vencida no opera;
+si `puede_iniciar_jornada=true`, debe poder ejecutarse POST `jornadas/iniciar/`,
+que recupera los cierres propios anteriores antes de crear la jornada actual.
+No se modificó frontend ni el contrato HTTP para esta recuperación.
 
 ## 0.43.0 — Recuperación al encender o reactivar el servidor (2026-10-30)
 
@@ -7262,11 +7256,24 @@ existentes, tubos anteriores y límites anteriores intactos. Corporate local
 conserva19solicitudes y19artículos; frascos anteriores permanecen null. Ambas
 bases locales quedan sin migraciones pendientes.
 
-Precheck externo READ ONLY: destino Corporate/vitago_corporativo verificado,
-plan exclusivamente estas dos migraciones,24artículos para conservar y ninguna
-solicitud abierta en ese momento. **No se han aplicado externamente**: necesitan
-autorización explícita y luego publicación coordinada de este código. El frontend
-debe actualizar el POST y sus modelos antes de probar el nuevo contrato.
+Aplicación externa autorizada el30/octubre mediante «siempre aplicalas»;
+la autorización cubre también las migraciones de futuros cambios solicitados
+de este backend, verificando siempre destino/plan/integridad. Ambas migraciones
+ya están aplicadas en34.66.87.16/vitago_corporativo/public y no quedan pendientes.
+Se ejecutaron con transacciones propias para liberar los bloqueos de empresa
+antes de alterar solicitudes. Conservados tubos de23solicitudes,24artículos
+anteriores completos y límites previos; frascos históricos NULL. Límites
+de frascos20 y restricciones presentes, historial de migraciones consistente.
+De38conteos revisados,36no variaron; GPS creció50filas y sesiones1 durante
+actividad concurrente, en tablas no escritas por las migraciones. No se eliminaron
+registros ni se infirieron cantidades anteriores de frascos.
+
+Verificación posterior con configuración de producción y BD externa READ ONLY:
+límites compartidos, motoristas, resúmenes y detalle devolvieron200/CORS correcto,
+con campos nuevos y sin login ni tokens creados. Las comprobaciones públicas
+de salud devuelven200 y la nueva ruta `/solicitudes/{id}/carga/` devuelve401
+esperado al consultar sin token, confirmando que está publicada. El frontend
+debe actualizar el POST y sus modelos para consumir el contrato nuevo.
 
 Entrega móvil/web: reemplazar el formulario/lista editable de artículos por
 dos conteos («Tubos» y «Frascos»), permitir0en uno y exigir total>0; retirar
@@ -7283,3 +7290,332 @@ corrección y resumen. Cuatro GET200 en Corporate local sobre PostgreSQL READ
 ONLY, con preparación automática deshabilitada solo en ese diagnóstico:
 límites, motoristas, resúmenes y detalle con campos nuevos. Sin login ni
 tokens de prueba. No se modificó frontend, conexión, credenciales ni tareas.
+
+## 0.45.0 — Ubicación administrativa durante toda la jornada (2026-10-30)
+
+Corporate y Network permiten a administración consultar la última ubicación
+de los motoristas mientras su jornada esté activa y no haya vencido. No exige
+servicios asignados: incluye espera, pausa y almuerzo. El teléfono debe seguir
+enviando GPS durante esos períodos; el servidor no puede producir coordenadas
+actuales si el móvil no captura o no tiene conexión.
+
+### Listado para el mapa administrativo
+
+`GET /api/v1/seguimiento/motoristas/`, con Bearer. Devuelve200 y paginación
+estándar. Requiere `repartidor.ver_ubicacion` con alcance **empresa completa o
+global**. El alcance de una sucursal no concede seguimiento de toda la flota.
+Corporate limita resultados a las empresas autorizadas. Network solo admite
+alcance global sobre su flota compartida; una cuenta de empresa cliente no ve
+la ubicación de todos los motoristas Network. Los roles existentes de
+administración/operación conservan sus alcances; no se concede el permiso a
+solicitantes ni motoristas por este cambio.
+
+Filtros opcionales:
+
+| Parámetro | Valor |
+| --- | --- |
+| `empresa_id` | UUID, solo Corporate; no amplía el alcance del usuario. |
+| `repartidor_id` | UUID de un motorista autorizado. |
+| `estado_operativo` | `AVAILABLE`, `ON_ROUTE`, `PAUSED`, `OFFLINE` u `OUT_OF_SERVICE`. |
+| `en_almuerzo` | `true` o `false`. |
+| `con_servicios` | `true` o `false`, según tenga solicitudes en los seis estados activos. |
+| `pagina`, `tamano_pagina` | Paginación existente, predeterminado 20, máximo 100 por página. |
+
+Ejemplos: `?con_servicios=false`, `?en_almuerzo=true`,
+`?empresa_id={id}&tamano_pagina=100`. En Network, enviar `empresa_id` produce400
+con ese campo; la flota compartida no pertenece a una empresa cliente. Otros
+filtros desconocidos o inválidos también devuelven400 con su nombre estable.
+Sin Bearer devuelve401; sin permiso/alcance,403. Sin jornadas que coincidan,
+devuelve200 con `conteo=0` y `resultados=[]`.
+
+Ejemplo completo de respuesta con un motorista sin solicitudes (datos ficticios):
+
+```json
+{
+  "conteo": 1,
+  "pagina_siguiente": null,
+  "pagina_anterior": null,
+  "resultados": [
+    {
+      "repartidor_id": "11111111-1111-4111-8111-111111111111",
+      "usuario_id": "22222222-2222-4222-8222-222222222222",
+      "nombre": "Motorista Ejemplo",
+      "empresa_id": "33333333-3333-4333-8333-333333333333",
+      "jornada_id": "44444444-4444-4444-8444-444444444444",
+      "fecha_operativa": "2026-10-30",
+      "iniciada_en": "2026-10-30T08:00:00-06:00",
+      "cierre_programado_en": "2026-10-30T22:00:00-06:00",
+      "estado_operativo": "AVAILABLE",
+      "en_almuerzo": false,
+      "solicitudes_activas": 0,
+      "tiene_servicios_activos": false,
+      "ubicacion": {
+        "latitud": "14.075000",
+        "longitud": "-87.190000",
+        "precision_metros": "8.50",
+        "velocidad_metros_segundo": "0.000",
+        "rumbo_grados": null,
+        "registrada_en": "2026-10-30T11:59:58-06:00",
+        "recibida_en": "2026-10-30T11:59:59-06:00",
+        "es_operativo": false
+      },
+      "estado_ubicacion": "ACTUALIZADA",
+      "ubicacion_vigente": true,
+      "antiguedad_segundos": 2.0
+    }
+  ],
+  "hora_servidor": "2026-10-30T18:00:00+00:00",
+  "intervalo_actualizacion_segundos": 20,
+  "criterios_vigencia": {
+    "antiguedad_maxima_segundos": 120,
+    "precision_maxima_metros": 50.0
+  }
+}
+```
+
+En Network `empresa_id` es `null`. El servidor selecciona la última **captura** de
+la jornada actual, no el último lote recibido. No reutiliza el punto de otra
+jornada, puntos anteriores al inicio o futuros. Incluye `es_operativo=false`:
+el punto puede representar espera sin sumar km de servicio. `solicitudes_activas`
+cuenta ASSIGNED, GOING_TO_PICKUP, AT_PICKUP, PICKED_UP, IN_TRANSIT y
+AT_DESTINATION; no cuenta PENDING ni terminales. El listado no exige estado
+AVAILABLE ni tener solicitudes.
+
+`ubicacion_vigente` solo es `true` cuando `estado_ubicacion=ACTUALIZADA`:
+
+| Estado | Significado y presentación |
+| --- | --- |
+| `ACTUALIZADA` | Captura dentro de la antigüedad máxima y precisión conocida dentro del máximo. |
+| `DESACTUALIZADA` | Última captura demasiado antigua; mostrar como última posición conocida, con su antigüedad. |
+| `SIN_PRECISION` | Captura reciente sin precisión informada; mostrar calidad desconocida. |
+| `BAJA_PRECISION` | Captura reciente con error superior al máximo; mostrar advertencia de precisión. |
+| `SIN_UBICACION` | Aún no hay GPS de esta jornada; `ubicacion=null`, `antiguedad_segundos=null`. |
+
+La antigüedad se calcula con la hora del servidor y `registrada_en`, no con
+`recibida_en`. Prevalece DESACTUALIZADA cuando un punto además es impreciso.
+Los umbrales predeterminados son120segundos/50metros, pero consumir los
+valores devueltos: pueden cambiar por configuración. No reemplazar null por
+coordenadas 0/0 ni simular una posición actual. Precisión/velocidad/rumbo pueden
+ser `null` dentro de una ubicación registrada. Las coordenadas y mediciones
+decimales se serializan como cadenas; la antigüedad es número.
+
+Al terminar o vencer la jornada, el motorista desaparece del listado aunque
+se conserve GPS histórico. También se excluyen perfiles/usuarios inactivos.
+Si un marcador ya no está en el listado completo actualizado, retirarlo del
+mapa activo. No conservarlo como conectado de forma indefinida. La respuesta
+usa `Cache-Control: no-store`.
+
+### Configuración móvil: GPS durante toda la jornada
+
+`GET /api/v1/seguimiento/configuracion/` conserva su contrato y añade:
+
+```json
+{
+  "seguimiento_jornada": {
+    "captura_habilitada": true,
+    "jornada_id": "44444444-4444-4444-8444-444444444444",
+    "cierre_programado_en": "2026-10-31T04:00:00+00:00",
+    "requiere_servicio_activo": false,
+    "incluye_tiempo_sin_servicios": true,
+    "incluye_almuerzo": true,
+    "detener_al_finalizar_jornada": true
+  }
+}
+```
+
+Este fragmento es aditivo: conserva `hora_servidor`, zona horaria, intervalos,
+diagnóstico y llegada automática. Sin jornada vigente devuelve
+`captura_habilitada=false`, `jornada_id=null`, `cierre_programado_en=null`.
+No cambiar la hora del teléfono: usar la alineación temporal existente con el
+servidor y respetar el instante de corte, aunque esté expresado en UTC.
+
+El móvil debe mantener su captura GPS y envío de lotes durante toda jornada
+vigente, también sin trabajos y durante pausa/almuerzo, con el soporte existente
+de ejecución en segundo plano. No depender de que esté abierta la pantalla de
+ruta. Frecuencias predeterminadas: captura cada 5 segundos en movimiento y 15
+detenido, envío cada 20 segundos; siempre leer los intervalos de configuración. Este cambio no
+agrega un segundo rastreador ni otro endpoint de escritura.
+
+Usar el POST existente, sin exigir solicitud ni asignación:
+
+```http
+POST /api/v1/seguimiento/registros/
+Authorization: Bearer {access_token}
+Content-Type: application/json
+```
+
+```json
+{
+  "jornada_id": "44444444-4444-4444-8444-444444444444",
+  "registros": [
+    {
+      "id_cliente": "55555555-5555-4555-8555-555555555555",
+      "sesion_gps": "66666666-6666-4666-8666-666666666666",
+      "secuencia": 1,
+      "latitud": "14.075000",
+      "longitud": "-87.190000",
+      "precision_metros": "8.50",
+      "registrada_en": "2026-10-30T11:59:58-06:00"
+    }
+  ]
+}
+```
+
+UUID/fecha son ilustrativos: usar jornada propia, IDs idempotentes y capturas
+reales. `sesion_gps`/`secuencia` mantienen la regla existente de enviarse juntos;
+no reiniciar la secuencia de una sesión al completar un servicio. No enviar
+`es_operativo`: lo determina el servidor. Se conservan respuesta201, lotes de
+hasta200, idempotencia, cola sin conexión y confirmación de sesiones al cerrar.
+Dejar de generar nuevas capturas al finalizar/vencer la jornada; sincronizar
+la cola anterior según el contrato existente. No capturar ubicación personal
+fuera de jornada.
+
+### Entrega exacta al frontend y verificación
+
+Móvil: desacoplar GPS de los servicios y de la pantalla del mapa; activarlo con
+la jornada vigente usando `seguimiento_jornada`, mantenerlo durante espera y
+almuerzo y detenerlo al cierre. Panel administrativo: consultar este GET con
+los permisos indicados, cargar todas las páginas antes de reconciliar marcadores
+y refrescar según `intervalo_actualizacion_segundos`; mostrar nombre, estado,
+almuerzo, servicios, antigüedad/precisión y ubicación sobre el mapa integrado.
+No hace falta calcular rutas ni llamar a Google para esta consulta. Es un
+seguimiento periódico por GPS; no hay WebSocket ni posición continua inventada.
+
+El seguimiento autorizado del solicitante por solicitud conserva sus reglas
+y no expone GPS de espera/almuerzo por este cambio. No se alteraron asignaciones,
+capacidad, cierres, km, evidencias ni permisos de escritura.
+
+Sin migración. Django check correcto y makemigrations--check sin cambios.
+Pruebas:888casos,861aprobados/27omitidos porque requieren PostgreSQL de pruebas,
+semilla4500, Google real bloqueado;27casos nuevos. Código actual probado con
+configuración de producción y PostgreSQL Corporate externo en READ ONLY:
+tres listados y configuración200, CORS correcto y no-store; un motorista sin
+servicios tenía ubicación ACTUALIZADA. No quedan migraciones pendientes en
+ese destino; sin login ni tokens creados. Esta comprobación usa el código local
+contra la base externa: **publicar la versión en Render** para disponer del
+endpoint nuevo allí. No se modificó frontend ni se hizo commit/push.
+
+## 0.46.0 — Fotografías en Base64 y retención mensual (2026-10-31)
+
+Por decisión expresa del usuario, **las fotografías nuevas se guardan como
+texto Base64 dentro de PostgreSQL**, tanto en Corporate como en Network. Cubre
+evidencias de recolección, entrega e incidencias. El backend deja de escribir
+archivos nuevos en disco; la base contiene el contenido y sus metadatos.
+
+### Transporte HTTP y permisos
+
+El frontend conserva los endpoints existentes y **no necesita convertir las
+fotos a Base64**. Envía `archivo` mediante multipart/form-data como hasta ahora;
+el backend valida la imagen y la codifica. Se conservan formatos JPEG/PNG/WebP,
+límite de10MB configurado, comprobación real de formato/píxeles, coordenadas,
+temperatura de recolección, permisos y transiciones automáticas de cada etapa.
+
+Las descargas siguen siendo archivos binarios, nunca un JSON con la imagen:
+
+```http
+GET /api/v1/solicitudes/{solicitud_id}/evidencias/{evidencia_id}/archivo/
+GET /api/v1/incidencias/{incidencia_id}/evidencias/{evidencia_id}/archivo/
+Authorization: Bearer {access_token}
+```
+
+Devuelven200 con el tipo de imagen y `Cache-Control: private, no-store`.
+Autenticación y alcance se verifican antes de entregar la foto o informar
+su vencimiento. No son URLs públicas ni se añade un endpoint de borrado desde
+el teléfono. Sin autorización se mantienen401/403/404 según el caso.
+
+Ni los listados ni los detalles incluyen `contenido_base64`. El manager difiere
+esa columna para no cargar megabytes por cada evidencia; solo la descarga y
+el mantenimiento la leen. Base64 es codificación, no cifrado, y ocupa más que
+los bytes originales; no enviarlo a logs ni incluirlo en resúmenes/paginación.
+
+### Meses conservados y limpieza automática
+
+Se conserva **el mes actual y el anterior**, según la zona horaria operativa
+configurada del servidor. No se usa la hora del teléfono ni una ventana móvil
+de60días. Las nuevas fotos tienen fecha de registro determinada por el backend.
+
+| Mes operativo | Se conservan | Se elimina el contenido de imágenes de |
+| --- | --- | --- |
+| Noviembre2026 | Octubre y noviembre | Septiembre2026 y anteriores |
+| Diciembre2026 | Noviembre y diciembre | Octubre2026 y anteriores |
+| Enero2027 | Diciembre y enero | Noviembre2026 y anteriores |
+
+El temporizador del proceso servidor revisa el cambio de mes sin depender de
+que el motorista tenga el teléfono encendido o de que lleguen peticiones.
+También recupera al arrancar y después de inactividad. Procesa imágenes
+vencidas de todos los meses pendientes, en lotes, con reintentos. No requiere
+Firebase ni un servicio de almacenamiento externo. Si el proceso está apagado
+o el alojamiento lo suspende, recupera al reactivarse; ningún código puede
+ejecutarse mientras su proceso está detenido. Aun si la purga se retrasa, el
+backend ya impide descargar una imagen vencida según su propio reloj.
+
+Se elimina solo el contenido Base64 y, cuando corresponda, el original de
+archivo anterior. **Se conservan las filas y metadatos de evidencia**, sus
+fechas, tipo, coordenadas, tamaño original, temperatura, solicitud/incidencia,
+motorista y auditoría. No se borran solicitudes, eventos, GPS ni recorridos.
+La retención no invalida las transiciones operativas ya realizadas con esa foto.
+
+### Campos nuevos en evidencias de solicitud e incidencia
+
+Se mantienen todos los campos previos y `archivo_disponible`. Se añaden:
+
+```json
+{
+  "archivo_disponible": true,
+  "imagen_expira_en": "2026-12-01T00:00:00-06:00",
+  "imagen_eliminada_en": null
+}
+```
+
+Ejemplo para una foto registrada en octubre: deja de estar disponible el
+1/diciembre a medianoche operativa. `imagen_eliminada_en` refleja cuándo se
+vació efectivamente el contenido; puede seguir null si la tarea aún no pasó.
+`archivo_disponible` ya es false desde el vencimiento, independientemente de
+esa tarea. Si no está vencida pero falta su original anterior a la migración,
+también esfalse; no inventar una foto ni confundir ausencia con retención.
+
+Una descarga vencida devuelve **410 Gone**:
+
+```json
+{
+  "detail": "La fotografía fue eliminada por la retención mensual. El registro de evidencia se conserva."
+}
+```
+
+Mostrar «Imagen eliminada por retención» y conservar visible la evidencia
+histórica con sus datos. No tratar410 como error de conexión, cierre de sesión
+ni motivo para reintentar indefinidamente. El servidor decide disponibilidad;
+el teléfono no puede prolongarla cambiando fecha. Para ausencia de un original
+no vencido se conserva404 en descarga; mostrar imagen no disponible.
+
+### Imágenes anteriores, migraciones y publicación
+
+`evidencias.0003_imagenes_base64_retencion` e
+`incidencias.0002_imagenes_base64_retencion` añaden texto privado y fechas
+nullable, índices y restricciones. Las imágenes anteriores no se inventan:
+el mantenimiento importa los originales disponibles, valida formato/tamaño,
+verifica bytes persistidos y solo después retira sus copias de disco.
+Conserva lectura de originales anteriores durante esa transición.
+
+Migraciones ya aplicadas en las bases locales Corporate/Network y Corporate
+externo verificado; cero pendientes, metadatos anteriores conservados.
+Corporate local:13fotos copiadas/verificadas. Externo:13de19 en Base64; los
+13originales locales se retiraron después de comprobar ambas bases. Seis
+originales externos no estaban localmente y los intentos de recuperación por
+API respondieron404; quedan pendientes de sus originales/respaldo. No afirmar
+que esas seis imágenes ya fueron importadas ni concluir pérdida física sin
+revisar el almacenamiento remoto. Sus registros se conservaron.
+
+La automatización forma parte de WSGI/ASGI y gunicorn.conf.py. Su bandera
+HABILITAR_MANTENIMIENTO_IMAGENES es true por defecto. Comando administrativo
+`mantener_imagenes` permite simular/verificar importación y retención con modo
+esperado; detalles de despliegue en VITAGO_EJECUCION_LOCAL.md. No lo ejecuta el
+frontend. No se agregaron dependencias, cambios de conexión ni servicios de pago.
+
+**Publicar0.46 en Render** para activar las nuevas cargas, descarga desde BD y
+temporizador allí; aplicar columnas por sí solo no cambia el código publicado.
+El frontend únicamente adapta las dos fechas y el tratamiento de410. Pruebas:
+926casos,899aprobados/27PGomitidos, semilla4605, Google real bloqueado. Lista y
+descarga200 verificadas con código actual/producción y BD externa READ ONLY;
+CORS correcto, sin Base64 en JSON y bytes descargados idénticos a PostgreSQL.
+Las sesiones temporales usadas para intentar rescate quedaron todas revocadas.

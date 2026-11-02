@@ -15,11 +15,13 @@ class TrackingConfiguration {
     required this.minimumCoveragePercentage,
     this.captureDiagnostics,
     this.automaticArrival,
+    this.shiftTracking,
   });
 
   factory TrackingConfiguration.fromJson(Map<String, dynamic> json) {
     final diagnostics = optionalJsonMap(json, 'diagnostico_captura');
     final arrival = optionalJsonMap(json, 'llegada_automatica');
+    final shiftTracking = optionalJsonMap(json, 'seguimiento_jornada');
     return TrackingConfiguration(
       serverTime: requireDateTime(json, 'hora_servidor'),
       operationalTimeZone: requireString(json, 'zona_horaria_operativa'),
@@ -56,6 +58,9 @@ class TrackingConfiguration {
       automaticArrival: arrival == null
           ? null
           : AutomaticArrivalConfiguration.fromJson(arrival),
+      shiftTracking: shiftTracking == null
+          ? null
+          : ShiftTrackingConfiguration.fromJson(shiftTracking),
     );
   }
 
@@ -86,6 +91,59 @@ class TrackingConfiguration {
   final double minimumCoveragePercentage;
   final TrackingCaptureDiagnostics? captureDiagnostics;
   final AutomaticArrivalConfiguration? automaticArrival;
+  final ShiftTrackingConfiguration? shiftTracking;
+}
+
+class ShiftTrackingConfiguration {
+  const ShiftTrackingConfiguration({
+    required this.captureEnabled,
+    required this.shiftId,
+    required this.scheduledCloseAt,
+    required this.requiresActiveService,
+    required this.includesTimeWithoutServices,
+    required this.includesLunch,
+    required this.stopAtShiftEnd,
+  });
+
+  factory ShiftTrackingConfiguration.fromJson(Map<String, dynamic> json) {
+    final enabled = json['captura_habilitada'];
+    final requiresService = json['requiere_servicio_activo'];
+    final withoutServices = json['incluye_tiempo_sin_servicios'];
+    final lunch = json['incluye_almuerzo'];
+    final stop = json['detener_al_finalizar_jornada'];
+    if (enabled is! bool ||
+        requiresService is! bool ||
+        withoutServices is! bool ||
+        lunch is! bool ||
+        stop is! bool) {
+      throw const FormatException('seguimiento_jornada incompleto.');
+    }
+    final shiftId = optionalString(json, 'jornada_id');
+    final closeAt = optionalDateTime(json, 'cierre_programado_en');
+    if (enabled && (shiftId == null || closeAt == null)) {
+      throw const FormatException('Jornada de seguimiento incompleta.');
+    }
+    return ShiftTrackingConfiguration(
+      captureEnabled: enabled,
+      shiftId: shiftId,
+      scheduledCloseAt: closeAt,
+      requiresActiveService: requiresService,
+      includesTimeWithoutServices: withoutServices,
+      includesLunch: lunch,
+      stopAtShiftEnd: stop,
+    );
+  }
+
+  final bool captureEnabled;
+  final String? shiftId;
+  final DateTime? scheduledCloseAt;
+  final bool requiresActiveService;
+  final bool includesTimeWithoutServices;
+  final bool includesLunch;
+  final bool stopAtShiftEnd;
+
+  bool permitsCaptureFor(String shiftId) =>
+      captureEnabled && this.shiftId == shiftId;
 }
 
 class AutomaticArrivalConfiguration {

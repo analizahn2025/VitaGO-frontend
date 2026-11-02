@@ -5,6 +5,7 @@ import 'package:vitago_app/core/formatters/app_date_format.dart';
 import 'package:vitago_app/core/widgets/pagination_footer.dart';
 import 'package:vitago_app/features/evidence/controllers/evidence_controller.dart';
 import 'package:vitago_app/features/evidence/views/evidence_image_view.dart';
+import 'package:vitago_app/features/evidence/views/evidence_availability_text.dart';
 
 class RequestEvidenceSection extends ConsumerStatefulWidget {
   const RequestEvidenceSection({required this.requestId, super.key});
@@ -54,7 +55,8 @@ class _RequestEvidenceSectionState
                 title: Text(_typeLabel(item.type)),
                 subtitle: Text(
                   'Registrada · ${AppDateFormat.dateTime(item.capturedAt)}'
-                  '${item.type == 'FOTO_RECOLECCION' ? '\nTemperatura: ${item.temperatureC == null ? 'Sin registrar' : '${item.temperatureC} °C'}${item.temperatureSource == 'MANUAL' ? ' · Manual' : ''}' : ''}',
+                  '${item.type == 'FOTO_RECOLECCION' ? '\nTemperatura: ${item.temperatureC == null ? 'Sin registrar' : '${item.temperatureC} °C'}${item.temperatureSource == 'MANUAL' ? ' · Manual' : ''}' : ''}'
+                  '\n${evidenceAvailabilityText(item, DateTime.now())}',
                 ),
                 trailing: item.fileAvailable
                     ? const Icon(Icons.open_in_new)

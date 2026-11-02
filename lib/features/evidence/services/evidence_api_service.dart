@@ -146,6 +146,12 @@ class EvidenceApiService {
             'application/octet-stream',
       );
     } on DioException catch (error) {
+      if (error.response?.statusCode == 410) {
+        throw const AppFailure(
+          message: 'Imagen eliminada por retención.',
+          statusCode: 410,
+        );
+      }
       throw AppFailure.fromDio(error);
     }
   }

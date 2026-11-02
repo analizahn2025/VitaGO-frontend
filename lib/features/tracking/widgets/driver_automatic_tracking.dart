@@ -80,12 +80,17 @@ class _DriverAutomaticTrackingState
     final shift = ref.watch(activeShiftControllerProvider).value;
     // Un cierre pendiente puede conservar la jornada ACTIVA. La cola anterior
     // continúa enviándose, pero no se agregan posiciones posteriores al corte.
-    _captureAllowed = shift?.canOperate != false || shift?.onLunch == true;
-    _scheduledCloseAt = shift?.scheduledCloseAt;
+    final policy = _configuration.shiftTracking;
+    _captureAllowed =
+        shift?.isActive == true &&
+        (policy == null || policy.permitsCaptureFor(shift!.id));
+    _scheduledCloseAt = policy?.scheduledCloseAt ?? shift?.scheduledCloseAt;
     final gpsEnabled = ref.watch(locationServiceEnabledProvider).value == true;
     _handleGpsState(gpsEnabled);
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) _synchronize(shift?.id, gpsEnabled);
+      if (mounted) {
+        _synchronize(shift?.isActive == true ? shift?.id : null, gpsEnabled);
+      }
     });
     return widget.child;
   }
@@ -117,6 +122,18 @@ class _DriverAutomaticTrackingState
             'Conecta el teléfono para sincronizar la hora oficial del GPS.',
           );
           _scheduleStartRetry(shiftId, generation);
+          return;
+        }
+      }
+      final policy = _configuration.shiftTracking;
+      if (policy != null) {
+        _captureAllowed = policy.permitsCaptureFor(shiftId);
+        _scheduledCloseAt = policy.scheduledCloseAt;
+        if (!_captureAllowed) {
+          await ref
+              .read(trackingQueueCoordinatorProvider)
+              .flushAll(maximumBatchSize: _configuration.maximumBatchSize);
+          if (mounted && generation == _generation) _stop();
           return;
         }
       }
@@ -184,9 +201,6 @@ class _DriverAutomaticTrackingState
   }) async {
     if (!mounted || _shiftId != shiftId) return;
     final generation = _generation;
-    ref
-        .read(driverTrackingStatusProvider.notifier)
-        .setCurrentLocation(location);
     if (!_captureAllowed) return;
     final recordedAt = ref.read(serverTimeClockProvider).currentUtc();
     if (recordedAt == null) {
@@ -198,8 +212,14 @@ class _DriverAutomaticTrackingState
       return;
     }
     if (_scheduledCloseAt case final cut? when !recordedAt.isBefore(cut)) {
+      _captureAllowed = false;
+      unawaited(_locationSubscription?.cancel());
+      _locationSubscription = null;
       return;
     }
+    ref
+        .read(driverTrackingStatusProvider.notifier)
+        .setCurrentLocation(location);
     final moving = (location.speedMetersPerSecond ?? 0) >= 0.7;
     final cadence = Duration(
       seconds: moving
@@ -263,6 +283,13 @@ class _DriverAutomaticTrackingState
     ref.invalidate(trackingConfigurationProvider);
     try {
       _configuration = await ref.read(trackingConfigurationProvider.future);
+      if (_shiftId case final shiftId?) {
+        final policy = _configuration.shiftTracking;
+        if (policy != null) {
+          _captureAllowed = policy.permitsCaptureFor(shiftId);
+          _scheduledCloseAt = policy.scheduledCloseAt;
+        }
+      }
       return true;
     } on Object {
       return false;
@@ -272,7 +299,12 @@ class _DriverAutomaticTrackingState
   Future<void> _refreshReferenceAndFlush(String shiftId) async {
     await _refreshConfiguration();
     if (!mounted || _shiftId != shiftId) return;
+    if (!_captureAllowed) {
+      unawaited(_locationSubscription?.cancel());
+      _locationSubscription = null;
+    }
     await _flush(shiftId);
+    if (!_captureAllowed && mounted && _shiftId == shiftId) _stop();
   }
 
   void _scheduleStartRetry(String shiftId, int generation) {

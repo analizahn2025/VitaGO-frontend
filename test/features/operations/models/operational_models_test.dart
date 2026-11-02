@@ -212,7 +212,37 @@ void main() {
     expect(evidence.contentType, 'image/jpeg');
     expect(evidence.sizeBytes, 245000);
     expect(evidence.fileAvailable, isTrue);
+    expect(evidence.imageExpiresAt, isNull);
+    expect(evidence.imageDeletedAt, isNull);
   });
+
+  test(
+    'conserva los metadatos de una imagen vencida sin inventar el archivo',
+    () {
+      final evidence = OperationalEvidence.fromJson({
+        'id': 'evidence-id',
+        'tipo_contenido': 'image/jpeg',
+        'tamano_bytes': 245000,
+        'latitud': '14.072300',
+        'longitud': '-87.192100',
+        'capturada_en': '2026-09-26T16:11:00Z',
+        'archivo_disponible': false,
+        'imagen_expira_en': '2026-11-01T00:00:00-06:00',
+        'imagen_eliminada_en': null,
+        'creado_en': '2026-09-26T16:11:03Z',
+      });
+      expect(evidence.imageExpiresAt, DateTime.parse('2026-11-01T06:00:00Z'));
+      expect(evidence.imageDeletedAt, isNull);
+      expect(
+        evidence.removedByRetentionAt(DateTime.utc(2026, 10, 31)),
+        isFalse,
+      );
+      expect(
+        evidence.removedByRetentionAt(DateTime.utc(2026, 11, 1, 6)),
+        isTrue,
+      );
+    },
+  );
 }
 
 Map<String, dynamic> _shiftJson() => {

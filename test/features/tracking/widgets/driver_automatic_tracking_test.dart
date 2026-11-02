@@ -17,6 +17,101 @@ import 'package:vitago_app/features/tracking/services/tracking_queue_coordinator
 import 'package:vitago_app/features/tracking/widgets/driver_automatic_tracking.dart';
 
 void main() {
+  testWidgets('la configuración de jornada deshabilitada no abre el GPS', (
+    tester,
+  ) async {
+    final service = _LocationService();
+    final queue = _QueueCoordinator();
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          activeShiftControllerProvider.overrideWith((ref) async => _shift),
+          locationServiceEnabledProvider.overrideWith(
+            (ref) => Stream.value(true),
+          ),
+          deviceLocationServiceProvider.overrideWithValue(service),
+          serverTimeClockProvider.overrideWithValue(
+            ServerTimeClock.withElapsedReader(() => Duration.zero),
+          ),
+          trackingRepositoryProvider.overrideWithValue(
+            _TrackingRepository(
+              ShiftTrackingConfiguration(
+                captureEnabled: false,
+                shiftId: null,
+                scheduledCloseAt: null,
+                requiresActiveService: false,
+                includesTimeWithoutServices: true,
+                includesLunch: true,
+                stopAtShiftEnd: true,
+              ),
+            ),
+          ),
+          trackingQueueCoordinatorProvider.overrideWithValue(queue),
+        ],
+        child: const MaterialApp(
+          home: DriverAutomaticTracking(enabled: true, child: SizedBox()),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(service.interval, isNull);
+    expect(service.currentLocationCalls, 0);
+    expect(queue.captured, isEmpty);
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets('en almuerzo sigue capturando sin servicios', (tester) async {
+    final service = _LocationService();
+    final queue = _QueueCoordinator();
+    addTearDown(service.locations.close);
+    final lunchShift = DriverShift.fromJson({
+      'id': 'shift-id',
+      'repartidor_id': 'driver-id',
+      'estado': 'ACTIVA',
+      'iniciada_en': _serverTime.toIso8601String(),
+      'creado_en': _serverTime.toIso8601String(),
+      'actualizado_en': _serverTime.toIso8601String(),
+      'puede_operar': false,
+      'en_almuerzo': true,
+      'servicios_completados': 0,
+    });
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          activeShiftControllerProvider.overrideWith((ref) async => lunchShift),
+          locationServiceEnabledProvider.overrideWith(
+            (ref) => Stream.value(true),
+          ),
+          deviceLocationServiceProvider.overrideWithValue(service),
+          serverTimeClockProvider.overrideWithValue(
+            ServerTimeClock.withElapsedReader(() => Duration.zero),
+          ),
+          trackingRepositoryProvider.overrideWithValue(
+            _TrackingRepository(
+              ShiftTrackingConfiguration(
+                captureEnabled: true,
+                shiftId: 'shift-id',
+                scheduledCloseAt: _serverTime.add(const Duration(hours: 1)),
+                requiresActiveService: false,
+                includesTimeWithoutServices: true,
+                includesLunch: true,
+                stopAtShiftEnd: true,
+              ),
+            ),
+          ),
+          trackingQueueCoordinatorProvider.overrideWithValue(queue),
+        ],
+        child: const MaterialApp(
+          home: DriverAutomaticTracking(enabled: true, child: SizedBox()),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(service.interval, const Duration(seconds: 5));
+    expect(queue.captured, hasLength(1));
+    await tester.pumpWidget(const SizedBox());
+  });
+
   testWidgets('después del corte no captura nuevos puntos y conserva la cola', (
     tester,
   ) async {
@@ -61,7 +156,7 @@ void main() {
     service.locations.add(afterCut);
     await tester.pump();
     expect(queue.captured.length, 1);
-    expect(service.locations.hasListener, isTrue);
+    expect(service.locations.hasListener, isFalse);
     expect(queue.flushCalls, greaterThan(0));
     await tester.pumpWidget(const SizedBox());
   });
@@ -305,6 +400,10 @@ class _LocationService extends DeviceLocationService {
 }
 
 class _TrackingRepository implements TrackingRepository {
+  _TrackingRepository([this.shiftTracking]);
+
+  final ShiftTrackingConfiguration? shiftTracking;
+
   @override
   Future<TrackingConfiguration> getConfiguration() async =>
       TrackingConfiguration(
@@ -319,6 +418,7 @@ class _TrackingRepository implements TrackingRepository {
         assignmentRequiresCurrentGps: true,
         maximumMeasurementIntervalSeconds: 30,
         minimumCoveragePercentage: 90,
+        shiftTracking: shiftTracking,
       );
 
   @override
