@@ -20,6 +20,8 @@ import 'package:vitago_app/features/routes/models/driver_route.dart';
 import 'package:vitago_app/features/routes/providers/routes_providers.dart';
 import 'package:vitago_app/features/shifts/controllers/shifts_controller.dart';
 import 'package:vitago_app/features/tracking/controllers/driver_tracking_status_controller.dart';
+import 'package:vitago_app/features/tracking/controllers/route_deviation_alerts_controller.dart';
+import 'package:vitago_app/features/tracking/models/route_deviation_alert.dart';
 import 'package:vitago_app/features/tracking/providers/tracking_providers.dart';
 
 class DriverRouteMapView extends ConsumerStatefulWidget {
@@ -86,6 +88,15 @@ class _DriverRouteMapViewState extends ConsumerState<DriverRouteMapView> {
     super.initState();
     _route = widget.route;
     _roadRoute = widget.roadRoute;
+    if (_route.deviationAlert != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          ref
+              .read(routeDeviationAlertProvider.notifier)
+              .synchronizeFromRoute(_route.deviationAlert);
+        }
+      });
+    }
     _selectedStop = _currentStop(_route, _roadRoute);
     _lastMapTarget =
         routeLocationPosition(_selectedStop?.location) ??
@@ -142,6 +153,16 @@ class _DriverRouteMapViewState extends ConsumerState<DriverRouteMapView> {
       driverTrackingStatusProvider.select((status) => status.lastLocation),
     );
     final deviceLocation = trackedLocation ?? _initialDeviceLocation;
+    final activeDeviation = ref.watch(routeDeviationAlertProvider);
+    final visibleDeviation =
+        activeDeviation?.isActive == true &&
+            _route.stops.any(
+              (stop) =>
+                  stop.requestId == activeDeviation!.requestId &&
+                  stop.type == activeDeviation.stopType,
+            )
+        ? activeDeviation
+        : null;
     ref.listen(
       driverTrackingStatusProvider.select((status) => status.lastLocation),
       (_, next) {
@@ -262,6 +283,23 @@ class _DriverRouteMapViewState extends ConsumerState<DriverRouteMapView> {
                   ),
                 ),
               ),
+              if (_route.nearbyCapture?.isUsable == true &&
+                  (deviceLocation?.accuracyMeters ?? 0) > 20)
+                Positioned(
+                  top: AppSpacing.md,
+                  left: AppSpacing.md,
+                  right: 80,
+                  child: SafeArea(
+                    child: Align(
+                      alignment: Alignment.topLeft,
+                      child: Chip(
+                        avatar: const Icon(Icons.gps_not_fixed, size: 18),
+                        label: const Text('Esperando mejor señal GPS'),
+                        backgroundColor: Theme.of(context).colorScheme.surface,
+                      ),
+                    ),
+                  ),
+                ),
               NotificationListener<DraggableScrollableNotification>(
                 onNotification: (notification) {
                   final extent = notification.extent;
@@ -276,6 +314,7 @@ class _DriverRouteMapViewState extends ConsumerState<DriverRouteMapView> {
                 },
                 child: _RouteMapSheet(
                   route: _route,
+                  deviationAlert: visibleDeviation,
                   roadRoute: _roadRoute,
                   canCalculate: widget.canCalculate && shiftCanOperate,
                   calculating: _calculating,
@@ -620,6 +659,9 @@ class _DriverRouteMapViewState extends ConsumerState<DriverRouteMapView> {
       _lastMapTarget =
           routeLocationPosition(selected?.location) ?? _lastMapTarget;
     });
+    ref
+        .read(routeDeviationAlertProvider.notifier)
+        .synchronizeFromRoute(refreshed.deviationAlert);
     if (selected != null) {
       ref.invalidate(requestControllerProvider(selected.requestId));
     }
@@ -819,6 +861,7 @@ class _DriverRouteMapViewState extends ConsumerState<DriverRouteMapView> {
 class _RouteMapSheet extends StatelessWidget {
   const _RouteMapSheet({
     required this.route,
+    required this.deviationAlert,
     required this.roadRoute,
     required this.canCalculate,
     required this.calculating,
@@ -834,6 +877,7 @@ class _RouteMapSheet extends StatelessWidget {
   });
 
   final DriverRoute route;
+  final RouteDeviationAlert? deviationAlert;
   final RoadRoute roadRoute;
   final bool canCalculate;
   final bool calculating;
@@ -889,6 +933,56 @@ class _RouteMapSheet extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: AppSpacing.md),
+                  if (deviationAlert case final alert?) ...[
+                    Semantics(
+                      liveRegion: true,
+                      label: 'Aviso de desvío de ruta',
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          color: colors.tertiaryContainer,
+                          borderRadius: BorderRadius.circular(AppRadii.surface),
+                        ),
+                        child: Padding(
+                          padding: const EdgeInsets.all(AppSpacing.md),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Icon(
+                                Icons.warning_amber_rounded,
+                                color: colors.onTertiaryContainer,
+                              ),
+                              const SizedBox(width: AppSpacing.sm),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      alert.title,
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .titleSmall
+                                          ?.copyWith(
+                                            color: colors.onTertiaryContainer,
+                                            fontWeight: FontWeight.w700,
+                                          ),
+                                    ),
+                                    const SizedBox(height: AppSpacing.xxs),
+                                    Text(
+                                      alert.message,
+                                      style: TextStyle(
+                                        color: colors.onTertiaryContainer,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: AppSpacing.md),
+                  ],
                   Text(
                     next == null
                         ? 'Recorrido finalizado'

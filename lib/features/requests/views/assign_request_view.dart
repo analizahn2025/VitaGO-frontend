@@ -51,10 +51,9 @@ class _AssignRequestViewState extends ConsumerState<AssignRequestView> {
         ),
       );
     }
-    final provider = availableDriversForRequestControllerProvider((
-      tubes: tubes,
-      flasks: flasks,
-    ));
+    final provider = availableDriversForRequestControllerProvider(
+      widget.request.id,
+    );
     final drivers = ref.watch(provider);
     return Scaffold(
       appBar: AppBar(
@@ -114,7 +113,7 @@ class _AssignRequestViewState extends ConsumerState<AssignRequestView> {
           const AppEmptyView(
             icon: Icons.no_accounts_outlined,
             title: 'No hay motoristas disponibles',
-            message: 'No hay motoristas con cupo para los tubos y frascos de este envío.',
+            message: 'No hay motoristas que cubran la recolección y cumplan los requisitos de jornada y cupo para este envío.',
           )
         else ...[
           DropdownButtonFormField<String>(
@@ -183,10 +182,7 @@ class _AssignRequestViewState extends ConsumerState<AssignRequestView> {
     } on AppFailure catch (failure) {
       if (mounted) {
         ref.invalidate(
-          availableDriversForRequestControllerProvider((
-            tubes: widget.request.summary.tubeCount!,
-            flasks: widget.request.summary.flaskCount!,
-          )),
+          availableDriversForRequestControllerProvider(widget.request.id),
         );
         setState(
           () =>

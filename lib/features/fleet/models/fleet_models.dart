@@ -108,6 +108,9 @@ class DriverProfile {
     this.availableFlasks,
     this.requestsWithoutFlaskCount,
     this.companyId,
+    this.operationCountryId,
+    this.operationDepartment,
+    this.coverageConfigured,
     this.vehicle,
     this.onLunch = false,
     this.lunchStartedAt,
@@ -119,6 +122,11 @@ class DriverProfile {
       id: requireString(json, 'id'),
       user: DriverUser.fromJson(requireJsonMap(json['usuario'], 'usuario')),
       companyId: optionalString(json, 'empresa_id'),
+      operationCountryId: optionalString(json, 'pais_operacion_id'),
+      operationDepartment: optionalString(json, 'departamento_operacion'),
+      coverageConfigured: json['cobertura_configurada'] is bool
+          ? json['cobertura_configurada'] as bool
+          : null,
       vehicle: vehicleJson == null ? null : Vehicle.fromJson(vehicleJson),
       operationalStatus: requireString(json, 'estado_operativo'),
       onLunch: optionalBool(json, 'en_almuerzo'),
@@ -154,6 +162,9 @@ class DriverProfile {
   final String id;
   final DriverUser user;
   final String? companyId;
+  final String? operationCountryId;
+  final String? operationDepartment;
+  final bool? coverageConfigured;
   final Vehicle? vehicle;
   final String operationalStatus;
   final bool onLunch;
@@ -219,6 +230,9 @@ class VehicleQuery {
 class DriverQuery {
   const DriverQuery({
     this.companyId,
+    this.operationCountryId,
+    this.operationDepartment,
+    this.coverageConfigured,
     this.operationalStatus,
     this.capacity,
     this.active,
@@ -228,6 +242,9 @@ class DriverQuery {
   });
 
   final String? companyId;
+  final String? operationCountryId;
+  final String? operationDepartment;
+  final bool? coverageConfigured;
   final String? operationalStatus;
   final String? capacity;
   final bool? active;
@@ -239,6 +256,10 @@ class DriverQuery {
     'pagina': page,
     'tamano_pagina': pageSize,
     if (companyId != null) 'empresa_id': companyId,
+    if (operationCountryId != null) 'pais_operacion_id': operationCountryId,
+    if (operationDepartment != null)
+      'departamento_operacion': operationDepartment,
+    if (coverageConfigured != null) 'cobertura_configurada': coverageConfigured,
     if (operationalStatus != null) 'estado_operativo': operationalStatus,
     if (capacity != null) 'capacidad': capacity,
     if (active != null) 'activo': active,
@@ -249,6 +270,9 @@ class DriverQuery {
   bool operator ==(Object other) {
     return other is DriverQuery &&
         other.companyId == companyId &&
+        other.operationCountryId == operationCountryId &&
+        other.operationDepartment == operationDepartment &&
+        other.coverageConfigured == coverageConfigured &&
         other.operationalStatus == operationalStatus &&
         other.capacity == capacity &&
         other.active == active &&
@@ -260,6 +284,9 @@ class DriverQuery {
   @override
   int get hashCode => Object.hash(
     companyId,
+    operationCountryId,
+    operationDepartment,
+    coverageConfigured,
     operationalStatus,
     capacity,
     active,

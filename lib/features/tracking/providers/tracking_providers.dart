@@ -9,6 +9,8 @@ import 'package:vitago_app/features/tracking/models/tracking_configuration.dart'
 import 'package:vitago_app/features/tracking/services/tracking_queue_coordinator.dart';
 import 'package:vitago_app/features/tracking/storage/tracking_queue_store.dart';
 import 'package:vitago_app/features/tracking/controllers/driver_arrivals_controller.dart';
+import 'package:vitago_app/features/tracking/controllers/route_deviation_alerts_controller.dart';
+import 'package:vitago_app/features/notifications/controllers/notifications_controller.dart';
 
 final deviceLocationServiceProvider = Provider<DeviceLocationService>((ref) {
   return const DeviceLocationService();
@@ -59,6 +61,17 @@ final trackingQueueCoordinatorProvider = Provider<TrackingQueueCoordinator>((
     onArrivals: (arrivals) {
       if (ref.mounted) {
         ref.read(driverArrivalsProvider.notifier).received(arrivals);
+      }
+    },
+    onRouteAlerts: (alerts) {
+      if (ref.mounted) {
+        final changed = ref
+            .read(routeDeviationAlertProvider.notifier)
+            .receivedFromGps(alerts);
+        if (changed) {
+          ref.invalidate(driverNotificationsControllerProvider);
+          ref.invalidate(unreadNotificationCountControllerProvider);
+        }
       }
     },
   );

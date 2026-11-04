@@ -7,6 +7,29 @@ import 'package:vitago_app/features/routes/repositories/routes_repository.dart';
 import 'package:vitago_app/features/routes/widgets/driver_route_section.dart';
 
 void main() {
+  test('lee el objetivo cercano sin sustituir la próxima parada', () {
+    final json = _routeJson();
+    json['captura_cercana'] = {
+      'habilitada': true,
+      'radio_activacion_metros': 250,
+      'radio_desactivacion_metros': 350,
+      'intervalo_captura_segundos': 5,
+      'intervalo_envio_segundos': 5,
+      'enviar_al_entrar': true,
+      'aplica_detenido': true,
+      'objetivo': {
+        'solicitud_id': 'request-1',
+        'tipo_parada': 'RECOLECCION',
+        'ubicacion_id': 'location-1',
+        'latitud': '14.072300',
+        'longitud': '-87.192100',
+      },
+    };
+    final route = DriverRoute.fromJson(json);
+    expect(route.nearbyCapture?.isUsable, isTrue);
+    expect(route.nearbyCapture?.target?.requestId, 'request-1');
+  });
+
   test(
     'conserva paradas intercaladas aunque reaparezca la misma solicitud',
     () {
@@ -143,6 +166,28 @@ void main() {
     });
     expect(route.currentArrival!.targetStatus, 'DELIVERED');
     expect(DriverRoute.fromJson(_routeJson()).currentArrival, isNull);
+  });
+
+  test('recupera el aviso de desvío activo de mi-ruta', () {
+    final route = DriverRoute.fromJson({
+      ..._routeJson(),
+      'alerta_desviacion': {
+        'id': 'alert-id',
+        'evento_id': 'event-id',
+        'tipo': 'DESVIACION_RUTA',
+        'solicitud_id': 'request-id',
+        'tipo_parada': 'RECOLECCION',
+        'detectada_en': '2026-11-03T17:00:00Z',
+        'finalizada_en': null,
+        'titulo': 'Desvío de ruta detectado',
+        'mensaje': 'Revisa tu ruta y reporta cualquier incidencia.',
+        'ruta': '/solicitudes/request-id',
+      },
+    });
+
+    expect(route.deviationAlert?.id, 'alert-id');
+    expect(route.deviationAlert?.isActive, isTrue);
+    expect(DriverRoute.fromJson(_routeJson()).deviationAlert, isNull);
   });
   test(
     'interpreta el mapa integrado y el estado vial sin navegación externa',

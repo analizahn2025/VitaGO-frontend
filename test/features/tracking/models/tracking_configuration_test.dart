@@ -2,6 +2,63 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:vitago_app/features/tracking/models/tracking_configuration.dart';
 
 void main() {
+  test('lee la política cercana publicada dentro de llegada automática', () {
+    final configuration = TrackingConfiguration.fromJson({
+      ..._configurationJson,
+      'llegada_automatica': {
+        'habilitada': true,
+        'radio_metros': 50,
+        'permanencia_minima_segundos': 10,
+        'minimo_puntos': 3,
+        'precision_maxima_metros': 20,
+        'antiguedad_maxima_segundos': 30,
+        'solo_proxima_parada': true,
+        'destino_especial_sin_coordenadas_manual': true,
+        'captura_cercana': {
+          'habilitada': true,
+          'radio_activacion_metros': 250,
+          'radio_desactivacion_metros': 350,
+          'intervalo_captura_segundos': 5,
+          'intervalo_envio_segundos': 5,
+          'enviar_al_entrar': true,
+          'aplica_detenido': true,
+        },
+      },
+    });
+    expect(configuration.nearbyCapture?.enabled, isTrue);
+    expect(configuration.nearbyCapture?.activationMeters, 250);
+    expect(configuration.nearbyCapture?.target, isNull);
+  });
+
+  test(
+    'lee los umbrales informativos de desvío sin calcularlos en Flutter',
+    () {
+      final configuration = TrackingConfiguration.fromJson({
+        ..._configurationJson,
+        'desviacion_ruta': {
+          'habilitada': true,
+          'radio_metros': 150.0,
+          'radio_regreso_metros': 75.0,
+          'permanencia_minima_segundos': 60,
+          'minimo_puntos': 3,
+          'precision_maxima_metros': 50.0,
+          'antiguedad_maxima_segundos': 60,
+          'requiere_ruta_vial_vigente': true,
+          'solo_proxima_parada': true,
+        },
+      });
+      expect(configuration.routeDeviation?.enabled, isTrue);
+      expect(configuration.routeDeviation?.radiusMeters, 150);
+      expect(configuration.routeDeviation?.returnRadiusMeters, 75);
+      expect(configuration.routeDeviation?.minimumPoints, 3);
+      expect(configuration.routeDeviation?.requiresCurrentRoadRoute, isTrue);
+      expect(
+        TrackingConfiguration.fromJson(_configurationJson).routeDeviation,
+        isNull,
+      );
+    },
+  );
+
   test(
     'lee la autorización de GPS de la jornada sin depender de servicios',
     () {

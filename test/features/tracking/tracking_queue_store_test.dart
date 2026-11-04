@@ -51,6 +51,43 @@ void main() {
     expect(other.gpsSession, isNot(first.gpsSession));
     expect(other.sequence, 1);
   });
+
+  test('recupera una cola extensa tras consultas y reinicio', () async {
+    final store = FileTrackingQueueStore(
+      directoryProvider: () async => directory,
+    );
+    for (var i = 0; i < 60; i++) {
+      await store.enqueue('shift-1', _point('point-$i', i));
+      expect(await store.pendingCount('shift-1'), i + 1);
+    }
+    final restored = FileTrackingQueueStore(
+      directoryProvider: () async => directory,
+    );
+    final points = await restored.pendingPoints('shift-1', 100);
+    expect(points, hasLength(60));
+    expect(points.first.sequence, 1);
+    expect(points.last.sequence, 60);
+  });
+
+  test('un fallo de escritura no deja puntos fantasma en memoria', () async {
+    final store = FileTrackingQueueStore(
+      directoryProvider: () async => directory,
+    );
+    await store.enqueue('shift-1', _point('point-1', 0));
+    final blockedTemporary = Directory(
+      '${directory.path}${Platform.pathSeparator}gps_queue_v1.json.tmp',
+    );
+    await blockedTemporary.create();
+    await expectLater(
+      store.enqueue('shift-1', _point('point-2', 5)),
+      throwsA(isA<FileSystemException>()),
+    );
+    await blockedTemporary.delete();
+
+    expect(await store.pendingCount('shift-1'), 1);
+    final retried = await store.enqueue('shift-1', _point('point-2', 5));
+    expect(retried.sequence, 2);
+  });
 }
 
 final _baseTime = DateTime.utc(2026, 10, 13, 16);

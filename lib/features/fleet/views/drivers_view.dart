@@ -99,16 +99,24 @@ class _DriversViewState extends ConsumerState<DriversView> {
           }
           final driver = result.items[index - 1];
           final vehicle = driver.vehicle;
+          final coverage = driver.coverageConfigured == false
+              ? 'Cobertura pendiente'
+              : driver.operationDepartment?.isNotEmpty == true
+              ? driver.operationDepartment
+              : null;
+          final vehicleSummary = vehicle?.plate ?? 'Sin vehículo asignado';
           return EntityListTile(
             icon: Icons.badge_outlined,
             title: driver.user.fullName.isEmpty
                 ? driver.user.email
                 : driver.user.fullName,
-            subtitle: driver.onLunch
-                ? 'En almuerzo${driver.lunchStartedAt == null ? '' : ' desde ${AppDateFormat.dateTime(driver.lunchStartedAt!)}'}'
-                : vehicle == null
-                ? 'Sin vehículo asignado · ${driver.tubeLimit ?? '?'} tubos · ${driver.flaskLimit ?? '?'} frascos'
-                : '${vehicle.plate} · ${driver.tubeLimit ?? '?'} tubos · ${driver.flaskLimit ?? '?'} frascos',
+            subtitle: [
+              ?coverage,
+              if (driver.onLunch)
+                'En almuerzo${driver.lunchStartedAt == null ? '' : ' desde ${AppDateFormat.dateTime(driver.lunchStartedAt!)}'}'
+              else
+                vehicleSummary,
+            ].join(' · '),
             status: driver.operationalStatus,
             onTap: () async {
               await Navigator.of(context).push<void>(

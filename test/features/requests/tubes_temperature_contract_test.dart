@@ -84,8 +84,15 @@ void main() {
           ),
         );
         await tester.pumpAndSettle();
-        expect(calls.single.queryParameters['cantidad_tubos'], 2);
-        expect(calls.single.queryParameters['cantidad_frascos'], 0);
+        expect(calls.single.queryParameters['solicitud_id'], 'request');
+        expect(
+          calls.single.queryParameters.containsKey('cantidad_tubos'),
+          isFalse,
+        );
+        expect(
+          calls.single.queryParameters.containsKey('cantidad_frascos'),
+          isFalse,
+        );
         expect(calls.single.queryParameters.containsKey('empresa_id'), isFalse);
         await tester.tap(find.byType(DropdownButtonFormField<String>));
         await tester.pumpAndSettle();
@@ -189,6 +196,17 @@ void main() {
       });
       await fleet.getAvailableDrivers(tubeCount: 0, flaskCount: 3);
       expect(calls.last.queryParameters['cantidad_frascos'], 3);
+      await fleet.getAvailableDrivers(
+        requestId: 'request-id',
+        tubeCount: 0,
+        flaskCount: 3,
+      );
+      expect(calls.last.queryParameters['solicitud_id'], 'request-id');
+      expect(calls.last.queryParameters.containsKey('cantidad_tubos'), isFalse);
+      expect(
+        calls.last.queryParameters.containsKey('cantidad_frascos'),
+        isFalse,
+      );
       await OrganizationsApiService(client).updateDriverLimits(
         'company',
         const UpdateDriverLimitsInput(

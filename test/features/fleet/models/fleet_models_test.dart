@@ -39,6 +39,9 @@ void main() {
         'estado': 'ACTIVO',
       },
       'empresa_id': 'company-id',
+      'pais_operacion_id': 'country-id',
+      'departamento_operacion': 'Cortés',
+      'cobertura_configurada': true,
       'vehiculo': vehicleJson(),
       'estado_operativo': 'AVAILABLE',
       'capacidad': 'AVAILABLE_SPACE',
@@ -56,6 +59,9 @@ void main() {
     expect(driver.activeRequests, 2);
     expect(driver.requestLimit, 5);
     expect(driver.canReceiveRequests, isTrue);
+    expect(driver.operationCountryId, 'country-id');
+    expect(driver.operationDepartment, 'Cortés');
+    expect(driver.coverageConfigured, isTrue);
     expect(driver.active, isTrue);
   });
 
@@ -71,6 +77,9 @@ void main() {
         'estado': 'ACTIVO',
       },
       'empresa_id': null,
+      'pais_operacion_id': null,
+      'departamento_operacion': '',
+      'cobertura_configurada': false,
       'vehiculo': null,
       'estado_operativo': 'OFFLINE',
       'capacidad': 'EMPTY',
@@ -81,8 +90,25 @@ void main() {
 
     expect(driver.companyId, isNull);
     expect(driver.vehicle, isNull);
+    expect(driver.coverageConfigured, isFalse);
     expect(driver.active, isFalse);
   });
+
+  test(
+    'filtra perfiles pendientes por cobertura sin modificar otros filtros',
+    () {
+      final query = const DriverQuery(
+        companyId: 'company-id',
+        coverageConfigured: false,
+        operationCountryId: 'country-id',
+        operationDepartment: 'Cortés',
+      ).toQueryParameters();
+      expect(query['empresa_id'], 'company-id');
+      expect(query['cobertura_configurada'], isFalse);
+      expect(query['pais_operacion_id'], 'country-id');
+      expect(query['departamento_operacion'], 'Cortés');
+    },
+  );
 
   test('incluye empresa al crear vehículo corporate y la omite en network', () {
     const input = CreateVehicleInput(

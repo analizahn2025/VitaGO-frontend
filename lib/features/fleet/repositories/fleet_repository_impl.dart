@@ -29,9 +29,11 @@ class FleetRepositoryImpl implements FleetRepository {
 
   @override
   Future<PaginatedResult<DriverProfile>> getAvailableDrivers({
+    String? requestId,
     int? tubeCount,
     int? flaskCount,
   }) => _apiService.getAvailableDrivers(
+    requestId: requestId,
     tubeCount: tubeCount,
     flaskCount: flaskCount,
   );

@@ -145,6 +145,13 @@ class _DriverContent extends StatelessWidget {
           label: 'Teléfono',
           value: driver.user.phone ?? 'No registrado',
         ),
+        if (driver.coverageConfigured != null)
+          _DetailLine(
+            label: 'Departamento de operación',
+            value: driver.coverageConfigured == true
+                ? driver.operationDepartment ?? 'No informado'
+                : 'Pendiente de configurar',
+          ),
         DriverTubeLoad(driver: driver),
         if (driver.onLunch && driver.lunchStartedAt != null)
           _DetailLine(

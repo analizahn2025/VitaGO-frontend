@@ -164,6 +164,10 @@ class _CreateDriverViewState extends ConsumerState<CreateDriverView> {
           const Text(
             'Selecciona un usuario con rol de repartidor y su vehículo.',
           ),
+          const SizedBox(height: AppSpacing.xs),
+          const Text(
+            'Después de crearlo, configura su departamento de operación en el panel web para que pueda recibir envíos.',
+          ),
           if (_error case final error?) ...[
             const SizedBox(height: AppSpacing.md),
             Text(

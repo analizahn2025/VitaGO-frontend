@@ -16,6 +16,7 @@ import 'package:vitago_app/features/routes/repositories/routes_repository.dart';
 import 'package:vitago_app/features/routes/views/driver_route_map_view.dart';
 import 'package:vitago_app/features/tracking/providers/tracking_providers.dart';
 import 'package:vitago_app/features/tracking/controllers/driver_tracking_status_controller.dart';
+import 'package:vitago_app/features/tracking/models/route_deviation_alert.dart';
 
 void main() {
   testWidgets(
@@ -51,7 +52,7 @@ void main() {
         includesCompletedSegments: false,
         metricsInResponse: false,
       );
-      const route = DriverRoute(
+      final route = DriverRoute(
         driverId: 'driver-id',
         orderType: 'ASIGNACION',
         routeCalculated: false,
@@ -65,6 +66,17 @@ void main() {
           allowsExternalNavigation: false,
         ),
         roadRoute: roadRoute,
+        deviationAlert: RouteDeviationAlert(
+          id: 'alert-id',
+          eventId: 'event-id',
+          type: 'DESVIACION_RUTA',
+          requestId: 'request-id',
+          stopType: 'RECOLECCION',
+          detectedAt: DateTime.utc(2026, 11, 3, 17),
+          title: 'Desvío de ruta detectado',
+          message: 'Revisa tu ruta y reporta cualquier incidencia.',
+          route: '/solicitudes/request-id',
+        ),
       );
 
       await tester.pumpWidget(
@@ -80,7 +92,7 @@ void main() {
                   .copyWith(textScaler: const TextScaler.linear(1.5)),
               child: child!,
             ),
-            home: const DriverRouteMapView(
+            home: DriverRouteMapView(
               route: route,
               roadRoute: roadRoute,
               mapForTesting: ColoredBox(
@@ -95,6 +107,13 @@ void main() {
 
       expect(find.byKey(const Key('map-surface')), findsOneWidget);
       expect(find.text('Mapa de mi ruta'), findsOneWidget);
+      expect(find.text('Desvío de ruta detectado'), findsOneWidget);
+      expect(
+        find.text('Revisa tu ruta y reporta cualquier incidencia.'),
+        findsOneWidget,
+      );
+      await tester.drag(find.byType(ListView), const Offset(0, -160));
+      await tester.pumpAndSettle();
       expect(find.text('Próxima parada'), findsOneWidget);
       await tester.drag(find.byType(ListView), const Offset(0, -320));
       await tester.pumpAndSettle();

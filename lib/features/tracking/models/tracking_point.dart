@@ -1,5 +1,6 @@
 import 'package:vitago_app/core/models/json_readers.dart';
 import 'package:vitago_app/features/tracking/models/driver_arrival.dart';
+import 'package:vitago_app/features/tracking/models/route_deviation_alert.dart';
 
 class TrackingPoint {
   const TrackingPoint({
@@ -149,6 +150,7 @@ class TrackingBatchResult {
     required this.repeated,
     required this.points,
     this.detectedArrivals = const [],
+    this.routeAlerts = const [],
   });
 
   factory TrackingBatchResult.fromJson(Map<String, dynamic> json) {
@@ -157,6 +159,7 @@ class TrackingBatchResult {
       created: optionalInt(json, 'creados'),
       repeated: optionalInt(json, 'repetidos'),
       detectedArrivals: parseDriverArrivals(json['llegadas_detectadas']),
+      routeAlerts: parseRouteDeviationAlerts(json['alertas_ruta']),
       points: jsonMapList(
         json['registros'],
         'registros de seguimiento',
@@ -169,6 +172,7 @@ class TrackingBatchResult {
   final int repeated;
   final List<TrackingPoint> points;
   final List<DriverArrival> detectedArrivals;
+  final List<RouteDeviationAlert> routeAlerts;
 }
 
 class RequestTracking {

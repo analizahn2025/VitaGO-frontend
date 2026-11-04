@@ -2,6 +2,8 @@ import 'package:vitago_app/core/models/json_readers.dart';
 import 'package:vitago_app/features/routes/models/road_route_segment.dart';
 import 'package:vitago_app/features/routes/models/driver_route_flow.dart';
 import 'package:vitago_app/features/tracking/models/driver_arrival.dart';
+import 'package:vitago_app/features/tracking/models/route_deviation_alert.dart';
+import 'package:vitago_app/features/tracking/models/nearby_capture_policy.dart';
 
 class DriverRoute {
   const DriverRoute({
@@ -17,12 +19,16 @@ class DriverRoute {
     this.nextStop,
     this.currentArrival,
     this.flow,
+    this.deviationAlert,
+    this.nearbyCapture,
   });
 
   factory DriverRoute.fromJson(Map<String, dynamic> json) {
     final nextStop = optionalJsonMap(json, 'proxima_parada');
     final arrival = parseDriverArrivals([json['llegada_actual']]).firstOrNull;
     final flow = optionalJsonMap(json, 'flujo_actual');
+    final deviation = optionalJsonMap(json, 'alerta_desviacion');
+    final nearbyCapture = optionalJsonMap(json, 'captura_cercana');
     return DriverRoute(
       driverId: requireString(json, 'repartidor_id'),
       shiftId: optionalString(json, 'jornada_id'),
@@ -35,6 +41,12 @@ class DriverRoute {
       nextStop: nextStop == null ? null : DriverRouteStop.fromJson(nextStop),
       currentArrival: arrival,
       flow: flow == null ? null : DriverRouteFlow.fromJson(flow),
+      deviationAlert: deviation == null
+          ? null
+          : RouteDeviationAlert.fromJson(deviation),
+      nearbyCapture: nearbyCapture == null
+          ? null
+          : NearbyCapturePolicy.fromJson(nearbyCapture),
       stops: jsonMapList(
         json['paradas'],
         'paradas de la ruta',
@@ -55,6 +67,8 @@ class DriverRoute {
   final DriverRouteStop? nextStop;
   final DriverArrival? currentArrival;
   final DriverRouteFlow? flow;
+  final RouteDeviationAlert? deviationAlert;
+  final NearbyCapturePolicy? nearbyCapture;
   final List<DriverRouteStop> stops;
   final RouteMapConfiguration map;
   final RoadRoute roadRoute;

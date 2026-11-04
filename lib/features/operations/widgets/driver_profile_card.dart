@@ -88,6 +88,16 @@ class DriverProfileCard extends StatelessWidget {
               if (vehicle != null) StatusBadge(status: vehicle.status),
             ],
           ),
+          if (driver.coverageConfigured != null) ...[
+            const SizedBox(height: AppSpacing.sm),
+            Text(
+              driver.coverageConfigured == true
+                  ? 'Departamento: ${driver.operationDepartment ?? 'No informado'}'
+                  : 'Tu departamento de operación está pendiente de configurar.',
+              style: Theme.of(context).textTheme.bodyMedium
+                  ?.copyWith(color: colors.onSurfaceVariant),
+            ),
+          ],
           if (canUpdate) ...[
             const SizedBox(height: AppSpacing.sm),
             Align(

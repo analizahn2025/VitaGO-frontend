@@ -31,6 +31,8 @@ class FileTrackingQueueStore implements TrackingQueueStore {
   final TrackingDirectoryProvider _directoryProvider;
   final Uuid _uuid = const Uuid();
   Future<void> _tail = Future<void>.value();
+  Map<String, dynamic>? _cachedState;
+  File? _resolvedFile;
 
   @override
   Future<TrackingPointInput> enqueue(
@@ -142,31 +144,44 @@ class FileTrackingQueueStore implements TrackingQueueStore {
   }
 
   Future<Map<String, dynamic>> _read() async {
+    final cached = _cachedState;
+    if (cached != null) return cached;
     final file = await _file();
-    if (!await file.exists()) return _emptyState();
+    if (!await file.exists()) return _cachedState = _emptyState();
     try {
       final decoded = jsonDecode(await file.readAsString());
-      return _jsonMap(decoded);
+      return _cachedState = _jsonMap(decoded);
     } on Object {
       final damaged = File('${file.path}.damaged');
       if (await damaged.exists()) await damaged.delete();
       await file.rename(damaged.path);
-      return _emptyState();
+      return _cachedState = _emptyState();
     }
   }
 
   Future<void> _write(Map<String, dynamic> state) async {
-    final file = await _file();
-    final temporary = File('${file.path}.tmp');
-    await temporary.writeAsString(jsonEncode(state), flush: true);
-    if (await file.exists()) await file.delete();
-    await temporary.rename(file.path);
+    try {
+      final file = await _file();
+      final temporary = File('${file.path}.tmp');
+      await temporary.writeAsString(jsonEncode(state), flush: true);
+      if (await file.exists()) await file.delete();
+      await temporary.rename(file.path);
+      _cachedState = state;
+    } on Object {
+      // A failed write must not make unpersisted points appear saved.
+      _cachedState = null;
+      rethrow;
+    }
   }
 
   Future<File> _file() async {
+    final resolved = _resolvedFile;
+    if (resolved != null) return resolved;
     final directory = await _directoryProvider();
     if (!await directory.exists()) await directory.create(recursive: true);
-    return File('${directory.path}${Platform.pathSeparator}gps_queue_v1.json');
+    return _resolvedFile = File(
+      '${directory.path}${Platform.pathSeparator}gps_queue_v1.json',
+    );
   }
 }
 

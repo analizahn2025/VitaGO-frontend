@@ -67,6 +67,7 @@ class DriverNotification {
           const {
             'REASIGNACION_PENDIENTE',
             'SERVICIO_NO_ENTREGADO',
+            'DESVIACION_RUTA',
           }.contains(type.toUpperCase()),
       createdAt: optionalDateTime(json, 'creado_en'),
       readAt: optionalDateTime(json, 'leida_en'),
@@ -102,6 +103,7 @@ class DriverNotification {
       'SOLICITUD_RETIRADA' => 'Servicio retirado',
       'SOLICITUD_PRIORITARIA' => 'Servicio prioritario',
       'SOLICITUD_ACTUALIZADA' => 'Servicio actualizado',
+      'DESVIACION_RUTA' => 'Desvío de ruta detectado',
       _ => 'Actualización de VitaGo',
     };
   }

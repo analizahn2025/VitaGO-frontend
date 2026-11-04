@@ -4,6 +4,7 @@ import 'package:vitago_app/core/errors/app_failure.dart';
 import 'package:vitago_app/core/time/server_time_clock.dart';
 import 'package:vitago_app/features/tracking/models/tracking_point.dart';
 import 'package:vitago_app/features/tracking/models/driver_arrival.dart';
+import 'package:vitago_app/features/tracking/models/route_deviation_alert.dart';
 import 'package:vitago_app/features/tracking/repositories/tracking_repository.dart';
 import 'package:vitago_app/features/tracking/storage/tracking_queue_store.dart';
 
@@ -13,9 +14,11 @@ class TrackingQueueCoordinator {
     this._repository,
     this._serverTimeClock, {
     this.onArrivals,
+    this.onRouteAlerts,
   });
 
   final void Function(List<DriverArrival>)? onArrivals;
+  final void Function(List<RouteDeviationAlert>)? onRouteAlerts;
 
   final TrackingQueueStore _store;
   final TrackingRepository _repository;
@@ -63,6 +66,13 @@ class TrackingQueueCoordinator {
           onArrivals?.call(result.detectedArrivals);
         } on Object {
           // GPS is already acknowledged. mi-ruta can recover the arrival later.
+        }
+      }
+      if (result.routeAlerts.isNotEmpty) {
+        try {
+          onRouteAlerts?.call(result.routeAlerts);
+        } on Object {
+          // Los puntos ya están confirmados; mi-ruta recupera el aviso vigente.
         }
       }
       sent += points.length;

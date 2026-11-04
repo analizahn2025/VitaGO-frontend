@@ -18,15 +18,64 @@ El código del backend sigue siendo la fuente técnica definitiva. Este archivo
 es la referencia de integración para el frontend y solo presenta como
 **disponibles** las funciones que ya están implementadas.
 
-Última actualización: **2026-10-31**.
+Última actualización: **2026-11-04**.
 
-Contrato vigente: **0.46.0**.
+Actualización **0.56.0**: optimización del procesamiento GPS y fotografías. El
+GPS omite la búsqueda de asignaciones si no hay pendientes o motoristas elegibles.
+Las imágenes preparan Base64 antes de bloquear filas. Sin cambios HTTP/JSON ni
+adaptaciones nuevas del frontend; la integración de captura cercana de 0.55
+sigue siendo necesaria. Mediciones y alcance al final.
 
-Estado de integración frontend (2026-11-02): el mapa administrativo 0.45 está
-integrado solo en web; Flutter envía GPS durante la jornada usando
-`seguimiento_jornada`. El frontend móvil y el panel web conservan la carga
-multipart de fotos y muestran la retención y el HTTP 410 de la sección 0.46.
-La publicación del código backend 0.46 en Render se verifica por separado.
+Actualización **0.55.0**: captura GPS cercana para reducir la espera al llegar.
+`GET seguimiento/configuracion/` publica intervalos/radios y `GET rutas/mi-ruta/`
+añade `captura_cercana` con el objetivo autorizado. Flutter debe aplicar la
+frecuencia de 5 segundos cerca de la próxima parada y abrir la evidencia con
+`llegadas_detectadas` del POST GPS. Se mantienen las validaciones de llegada.
+
+Actualización **0.54.0**: revisión y optimización de las demás consultas de la
+API, incluidos cupos de motoristas, solicitudes, seguimiento, evidencias,
+jornadas, incidencias, usuarios/roles, catálogos, avisos e historial de rutas.
+Se conservan endpoints, JSON, permisos y reglas; no requiere cambios del frontend.
+
+Actualización **0.53.0**: optimización de exportaciones y consultas. Excel evita
+recorrer toda la hoja por cada fila; PDF reutiliza cálculos de líneas. Los
+listados agrupan consultas de permisos y los reportes leen menos columnas.
+Sin cambios de endpoints, JSON, permisos, fechas, filtros o límites.
+
+Actualización **0.52.0**: reportes Excel con altura adaptada al texto; PDF con
+identificador repetido en continuaciones, títulos junto a su contenido y fuentes
+Unicode incorporadas. Se conservan endpoint, permisos y formatos xlsx/pdf.
+Textos que superen los límites físicos de Excel responden400 con clave `formato`
+y recomendación de descargar PDF. Detalle al final.
+
+Actualización **0.51.0**: departamento fijo de operación por motorista,
+administrado por país, en Corporate y Network. La asignación automática y manual
+exigen que coincida con el departamento de recolección antes de ordenar por GPS.
+Nuevos endpoints `repartidores/departamentos/` y `{id}/cobertura/`, tres campos
+de lectura y filtros administrativos. Los perfiles anteriores requieren
+configuración administrativa para recibir servicios nuevos. Contrato al final.
+
+Actualización **0.50.0**: descarga administrativa de reportes de motoristas en
+Excel/PDF y detección de desvíos por GPS frente al próximo tramo vial vigente.
+GPS añade `alertas_ruta`; `mi-ruta` añade `alerta_desviacion`; notificaciones y
+eventos admiten `DESVIACION_RUTA`. La comparación histórica de kilómetros con
+Google queda pendiente por decisión del usuario. Contrato completo al final.
+
+Actualización **0.49.0**: configuración Docker simplificada a un Compose
+operativo y otro de pruebas. Arranque único con scripts/docker/iniciar.py;
+Corporate8001 conserva PostgreSQL en línea y Network8000 su base local.
+Sin cambios de endpoints, permisos, tokens o JSON. No requiere cambios del
+frontend. Instrucciones vigentes en DOCKER.md.
+
+Actualización **0.48.0**: modo Docker mixto activo, Corporate8001 conectado a
+PostgreSQL en línea y Network8000 con su base local. Sin cambio de endpoints,
+permisos o JSON operativos. Arranque en scripts/docker/iniciar.py y detalles
+en DOCKER.md; el servicio público Render conserva su despliegue independiente.
+
+Actualización **0.47.0**: backend preparado para Docker con arranque y bases
+aisladas. Nuevo GET público `/api/v1/salud/disponibilidad/`:200si PostgreSQL
+responde,503en caso contrario, sin información interna. El contrato de
+`salud/` y las APIs operativas se conservan. Ver sección0.47.0 y DOCKER.md.
 
 Actualización **0.46.0**: fotografías de evidencias guardadas como Base64 en
 PostgreSQL. El transporte HTTP conserva multipart y descarga binaria privada.
@@ -83,7 +132,7 @@ de alta; cada cuenta es SOLICITANTE_CORPORATIVO con alcance SUCURSAL. Ubicacione
 aprobadas como origen/destino, con coordenadas normalizadas y aún no verificadas
 en campo. Dos sucursales de prueba conservadas:36 totales. No cambia ningún
 endpoint/JSON. En aquella carga regía misma ciudad;0.37.0 la sustituye por
-país/departamento. Informe local:VITAGO_SUCURSALES_ANALIZA.md.
+país/departamento. Informe local:VITAGO_DATABASE_CONTEXT.md.
 
 Actualización **0.36.0**: flujo del motorista automático, sin aceptar servicios
 ni elegir recolección/entrega. `mi-ruta` añade `flujo_actual`. Foto válida de
@@ -210,6 +259,12 @@ ni cambia conexiones; el mapa móvil y su clave SDK corresponden al frontend.
 
 | Versión | Fecha | Cambio |
 |---|---|---|
+| 0.56.0 | 2026-11-04 | Precomprobación de pendientes/disponibilidad en los reintentos disparados por GPS, país precargado en la cola y preparación Base64 fuera de los bloqueos. Mismos contratos, cupos y asignación; medición con diez motoristas y PostgreSQL temporal. Sin migraciones. |
+| 0.55.0 | 2026-11-04 | Política GPS cercana en configuración y mi-ruta: captura/envío cada 5 s, entrada 250 m y salida 350 m; solo próxima parada en desplazamiento y jornada vigente. Requiere integración Flutter, conserva las pruebas de llegada y los historiales. Sin migración ni Google adicional. |
+| 0.54.0 | 2026-11-04 | Optimización de consultas de la API, conteo de cupos sin recorrer históricos y lecturas ligeras de seguimiento/evidencias. Pruebas de paginación, revocación y aislamiento en Corporate y Network. Sin cambios HTTP ni migraciones. |
+| 0.53.0 | 2026-11-04 | Optimización de Excel/PDF y consultas de solicitudes, tipos de servicio y resúmenes. Permisos en lote sin caché de autorización; mismo contenido y presentación. Sin migración ni cambios del contrato HTTP. |
+| 0.52.0 | 2026-11-03 | Ajuste de filas Excel y detección de textos que exceden sus límites; PDF identifica cada servicio en sus continuaciones, conserva títulos junto a las tablas e incorpora fuentes Unicode portables. Sin migración ni cambios de permisos/endpoint. |
+| 0.51.0 | 2026-11-03 | Departamento fijo y país por motorista en Corporate/Network; asignación automática/manual y disponibles por solicitud respetan cobertura antes de cercanía GPS. Configuración administrativa auditada, migración repartidores.0005 y perfiles anteriores pendientes de configurar. |
 | 0.41.0 | 2026-10-28 | Límites por empresa en Corporate y generales de Network, con cupo individual, configuración auditada y edición individual retirada. 741 pruebas aprobadas/24 PG omitidas; migración aplicada localmente. |
 | 0.40.2 | 2026-10-27 | CORS por origen web explícito para API v1; dominio Render y origen Vercel configurados, JWT/móvil conservados. 723 pruebas aprobadas/22 PG omitidas; pendiente publicar/desplegar código. |
 | 0.40.1 | 2026-10-27 | Arranque de Corporate con login propio en Render mediante ENTORNO=PRUEBAS, conservando seguridad de producción. Sin cambios de endpoints/JSON; variables y comandos en README. Base externa aún sin preparar/verificar. |
@@ -388,11 +443,14 @@ nombre predeterminado del claim es `sub`, aunque es configurable por despliegue.
 | `GET` | `/api/v1/repartidores/` | Ambos | Bearer + `repartidor.ver` | `200` |
 | `POST` | `/api/v1/repartidores/` | Ambos | Bearer + `repartidor.administrar` | `201` |
 | `GET` | `/api/v1/repartidores/disponibles/` | Ambos | Bearer + `repartidor.ver` | `200` |
+| `GET` | `/api/v1/repartidores/departamentos/` | Ambos | Bearer + `repartidor.administrar` en empresa Corporate o global Network | `200` |
+| `PATCH` | `/api/v1/repartidores/{repartidor_id}/cobertura/` | Ambos | Bearer + `repartidor.administrar` en empresa Corporate o global Network | `200` |
 | `GET` | `/api/v1/repartidores/mi-perfil/` | Ambos | Motorista autenticado con perfil activo | `200` |
 | `GET` | `/api/v1/repartidores/{repartidor_id}/` | Ambos | Bearer + `repartidor.ver` en alcance | `200` |
 | `PATCH` | `/api/v1/repartidores/{repartidor_id}/operacion/` | Ambos | Motorista propio o `repartidor.administrar` | `200` |
 | `GET` | `/api/v1/notificaciones/` | Ambos | Bearer; solo las propias | `200` |
 | `GET` | `/api/v1/notificaciones/conteo-no-leidas/` | Ambos | Bearer; solo las propias | `200` |
+| `GET` | `/api/v1/reportes/motoristas/descargar/` | Ambos | Administración con permisos y alcance de reporte | `200` binario Excel/PDF |
 | `POST` | `/api/v1/notificaciones/{notificacion_id}/marcar-leida/` | Ambos | Bearer; solo la propia | `200` |
 | `POST` | `/api/v1/jornadas/iniciar/` | Ambos | Motorista propio + `jornada.iniciar` | `201` |
 | `GET` | `/api/v1/jornadas/activa/` | Ambos | Motorista propio + `jornada.ver` | `200` |
@@ -1974,13 +2032,18 @@ decimales históricos se representan como texto.
 {
   "usuario_id": "ef19583b-459c-491e-becf-8e2f3f407673",
   "empresa_id": "3b0407a3-bc31-4d31-9619-7a3f01ac0b96",
-  "vehiculo_id": "9f1c7da2-e2a4-4a86-8bdb-6ddde60a6354"
+  "vehiculo_id": "9f1c7da2-e2a4-4a86-8bdb-6ddde60a6354",
+  "departamento_operacion": "Francisco Morazán"
 }
 ```
 
 El usuario debe estar activo y poseer previamente el rol técnico de motorista.
 En Corporate el rol y el vehículo deben pertenecer a la misma empresa. En
 Network tanto el rol como el perfil tienen alcance global.
+Desde0.51, Corporate obtiene el país de la empresa al configurar el departamento.
+Network requiere además `pais_operacion_id`. Omitir ambos campos crea un perfil
+sin cobertura, que no recibirá asignaciones hasta configurarlo. Véase0.51 para
+el formulario administrativo y los filtros por solicitud.
 
 El perfil nace con:
 
@@ -1998,6 +2061,9 @@ devuelve motoristas activos, con usuario y motocicleta activos, estado
 `AVAILABLE` o `ON_ROUTE` con al menos una solicitud activa, menos de cinco
 solicitudes activas y sin una solicitud prioritaria activa ni un envío
 especial exclusivo en curso.
+Desde0.51, disponibles exige además país activo y departamento configurados;
+`solicitud_id` limita la lista a la recolección de ese servicio. Los límites
+vigentes son los configurados por empresa Corporate o para toda la red, según0.41.
 
 Ambos listados usan el mismo sobre paginado y el mismo objeto de motorista.
 Ejemplo `200`:
@@ -2019,6 +2085,9 @@ Ejemplo `200`:
         "estado": "ACTIVO"
       },
       "empresa_id": "3b0407a3-bc31-4d31-9619-7a3f01ac0b96",
+      "pais_operacion_id": "6e143abc-1ab5-4420-8534-3ad62823135a",
+      "departamento_operacion": "Francisco Morazán",
+      "cobertura_configurada": true,
       "vehiculo": {
         "id": "9f1c7da2-e2a4-4a86-8bdb-6ddde60a6354",
         "empresa_id": "3b0407a3-bc31-4d31-9619-7a3f01ac0b96",
@@ -2062,6 +2131,9 @@ Ejemplo `200`:
     "estado": "ACTIVO"
   },
   "empresa_id": "3b0407a3-bc31-4d31-9619-7a3f01ac0b96",
+  "pais_operacion_id": "6e143abc-1ab5-4420-8534-3ad62823135a",
+  "departamento_operacion": "Francisco Morazán",
+  "cobertura_configurada": true,
   "vehiculo": {
     "id": "9f1c7da2-e2a4-4a86-8bdb-6ddde60a6354",
     "empresa_id": "3b0407a3-bc31-4d31-9619-7a3f01ac0b96",
@@ -3336,8 +3408,9 @@ integración visual. No añade endpoints ni cambia ningún JSON:
 Las coordenadas y direcciones del escenario son ficticias; no sirven para
 probar rutas ni kilometraje de Google Maps. Si un usuario cambia el estado de
 las solicitudes durante las pruebas, repetir el comando no las restablece.
-La preparación y sus requisitos están descritos en
-`VITAGO_EJECUCION_LOCAL.md`.
+Este escenario corresponde a las pruebas históricas de la base local. El
+arranque vigente está en `DOCKER.md`; las dos sucursales de prueba retiradas
+de Analiza deben conservarse inactivas.
 
 ## 30. Notificaciones persistentes y validaciones
 
@@ -5808,7 +5881,8 @@ a los 21 de la comprobación anterior que incluía dos puntos de prueba.
 
 El listado administrativo puede incluir sucursales INACTIVO para trazabilidad;
 respetar su estado y usar las opciones del backend al crear solicitudes.
-Auditoría detallada en el documento local VITAGO_SUCURSALES_ANALIZA.md.
+Resumen de la carga y sus pendientes en VITAGO_DATABASE_CONTEXT.md. El informe
+completo conserva un respaldo ZIP privado en logs.
 
 ## Diagnóstico: envíos en la pantalla administrativa (2026-10-26)
 
@@ -7609,7 +7683,7 @@ revisar el almacenamiento remoto. Sus registros se conservaron.
 La automatización forma parte de WSGI/ASGI y gunicorn.conf.py. Su bandera
 HABILITAR_MANTENIMIENTO_IMAGENES es true por defecto. Comando administrativo
 `mantener_imagenes` permite simular/verificar importación y retención con modo
-esperado; detalles de despliegue en VITAGO_EJECUCION_LOCAL.md. No lo ejecuta el
+esperado; detalles de despliegue en DOCKER.md. No lo ejecuta el
 frontend. No se agregaron dependencias, cambios de conexión ni servicios de pago.
 
 **Publicar0.46 en Render** para activar las nuevas cargas, descarga desde BD y
@@ -7619,3 +7693,790 @@ El frontend únicamente adapta las dos fechas y el tratamiento de410. Pruebas:
 descarga200 verificadas con código actual/producción y BD externa READ ONLY;
 CORS correcto, sin Base64 en JSON y bytes descargados idénticos a PostgreSQL.
 Las sesiones temporales usadas para intentar rescate quedaron todas revocadas.
+
+## 0.47.0 — Docker y disponibilidad del backend (2026-11-02)
+
+El empaquetado del backend incorpora imagen Docker y configuraciones separadas
+para local, pruebas y producción. No cambia autenticación, roles, solicitudes,
+GPS, evidencias ni los JSON operativos anteriores. Las instrucciones para
+iniciar/configurar contenedores están en DOCKER.md.
+
+Nuevo endpoint de diagnóstico, **sin Bearer**:
+
+```http
+GET /api/v1/salud/disponibilidad/
+```
+
+Ejecuta SELECT1 contra PostgreSQL y devuelve200 si responde:
+
+```json
+{"estado": "correcto", "servicio": "VitaGo Corporate"}
+```
+
+Si la base no está disponible, devuelve503:
+
+```json
+{"estado": "no_disponible", "servicio": "VitaGo Corporate"}
+```
+
+El nombre depende del despliegue. Usa `Cache-Control: no-store` y no revela
+host, usuario, contraseña, tablas ni excepción SQL. Si hay recuperación
+operativa pendiente en middleware, puede responder el503
+CIERRE_OPERATIVO_PENDIENTE ya documentado; ambos indican que el servidor aún
+no está listo para trabajar. No tratarlo como credenciales incorrectas.
+
+`GET /api/v1/salud/` conserva exactamente su contrato de salud del proceso.
+La disponibilidad es opcional para diagnóstico; no sustituye login ni exige
+un cambio de pantalla. Docker la usa para su healthcheck real HTTP/SQL.
+
+Para local, Corporate se publica por defecto en8001 y Network en8000, con bases,
+claves, sesiones, redes y volúmenes separados. Son bases nuevas sin cuentas ni
+datos importados de las anteriores. La URL pública de Render no cambió por
+crear estos archivos; cambiar el despliegue a Docker requiere los pasos de
+DOCKER.md. No cambiar el frontend de URL hasta elegir ese entorno.
+
+Verificación:945pruebas completas sobre PostgreSQL16dentro de Docker, todas
+aprobadas sin omisiones. Se verificaron ambos arranques, segundo arranque sin
+migraciones pendientes, healthchecks, aislamiento de bases, respuesta503ante
+caída y recuperación, imagen sin.env/.git y usuario sin root. No se hicieron
+llamadas facturables a Google ni cambios de datos en las bases operativas.
+
+## 0.50.0 — Reportes descargables y avisos de desvío (2026-11-03)
+
+### Descarga administrativa en Excel o PDF
+
+```http
+GET /api/v1/reportes/motoristas/descargar/?formato=xlsx&fecha_desde=2026-11-01&fecha_hasta=2026-11-03
+Authorization: Bearer <token_acceso>
+```
+
+Cambiar `formato=pdf` para PDF. Se aplica a Corporate y Network. Requiere los
+permisos existentes `reporte.ver`, `repartidor.ver`, `solicitud.ver`,
+`jornada.ver` y `evidencia.ver`, todos con alcance global o empresa suficiente
+para el historial del motorista. Un alcance de sucursal no habilita esa
+exportación. El administrador global puede consultar todos; un administrador
+de empresa queda limitado a su empresa. En Network, la flota compartida solo
+puede consultarse con alcance global en todos esos permisos; un cliente no
+recibe información de otros clientes.
+
+| Filtro | Contrato |
+| --- | --- |
+| `formato` | `xlsx` por defecto, o `pdf`. |
+| `fecha_desde` | Opcional, `AAAA-MM-DD`. |
+| `fecha_hasta` | Opcional, inclusive; no anterior a `fecha_desde`. |
+| `empresa_id` | UUID opcional, sujeto a permisos; no usar para la flota compartida Network. |
+| `repartidor_id` | UUID opcional para un motorista autorizado. |
+| `activo` | Booleano opcional; al omitirlo incluye también perfiles inactivos con historial. |
+
+Sin fechas se usa el día actual del servidor. Si solo se proporciona una fecha,
+se consulta ese mismo día. Cada empresa aplica su zona horaria operativa; Network
+usa la zona del servidor. El archivo identifica esas zonas y la hora de generación.
+Los filtros no modifican las fechas operativas ni aceptan la hora del teléfono
+como hora oficial. Límite: 31 días, 200 motoristas y 5000 filas de detalle por
+archivo; reducir el período o elegir un motorista si se supera. No hay paginación
+en la descarga: incluye todos los resultados autorizados dentro de esos límites.
+
+Respuesta **200 binaria**, sin sobre JSON:
+
+```http
+Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet
+Content-Disposition: attachment; filename="vitago-motoristas-2026-11-01-2026-11-03.xlsx"
+Cache-Control: no-store, private
+```
+
+Para PDF: `Content-Type: application/pdf`, con extensión `.pdf`. El encabezado
+`Content-Disposition` se expone por CORS para que la web conozca el nombre. Puede
+enviarse `Accept: application/pdf`; el parámetro `formato` determina el archivo.
+Los errores conservan JSON aunque se solicite un archivo:
+
+```json
+{"fecha_hasta": ["El reporte admite como máximo 31 días. Reduzca el período."]}
+```
+
+Otros códigos: 400 con el campo afectado (`formato`, fechas, filtros, etc.),
+401 sin sesión y 403 si falta un permiso obligatorio. Si no hay motoristas
+visibles con los filtros, devuelve un archivo informativo **200**, sin exponer
+la existencia de registros ajenos. No convertir esos JSON en errores de conexión.
+
+Excel contiene cinco hojas: **Resumen, Jornadas, Servicios, Temperaturas y
+Desvíos**; sin resultados solo incluye la hoja informativa Resumen. PDF organiza
+los mismos datos por motorista. Orden de motoristas: nombres, apellidos e ID;
+dentro de cada motorista, detalles por fecha ascendente e ID como desempate.
+
+Incluye identificación, empresa/flota, placa, perfil activo, zona horaria,
+asignadas/recolectadas/entregadas/fallidas/canceladas, tubos y frascos conocidos,
+cantidades históricas ausentes, kilómetros medidos/consolidados, calidad y cierre
+de jornadas, tiempos operativos/activos/almuerzo, temperaturas y avisos de desvío.
+Servicios muestra una fila por asignación que intersecta el período, con número,
+empresa, sucursal, solicitante, origen, destino, modalidad, prioridad, estado
+actual del servicio, estado/fechas de esa asignación y cantidades. Una solicitud
+reasignada puede aparecer en el historial de varios motoristas: no contar sus
+filas como entregas de todos ellos. Los contadores respetan el responsable real
+de cada recolección/entrega según el historial existente.
+
+Los kilómetros se suman **por jornadas**, sin multiplicarlos por cada solicitud
+simultánea. Se atribuyen al período de cierre; las jornadas aún abiertas o sin
+medición se muestran como pendientes/N/D, no como cero recorrido. La calidad GPS
+permite distinguir medido de consolidado. El reporte no carga todos los puntos
+GPS ni fotografías/Base64 y no consulta Google.
+
+La comparación histórica de kilómetros con Google queda **pendiente**, según
+confirmación del usuario. No se inventa un valor con una consulta actual ni se
+exportan métricas del proveedor. El archivo advierte esa limitación. Condiciones
+de almacenamiento/exportación: [Google Maps Platform](https://cloud.google.com/maps-platform/terms?utm_campaign=gmp_git_agentskills_v1)
+y [Routes API, apartado19](https://cloud.google.com/maps-platform/terms/maps-service-terms?utm_campaign=gmp_git_agentskills_v1).
+
+### Detección automática de desvíos
+
+Se ejecuta en el servidor tras confirmar un lote GPS, también ante un reintento
+idéntico. Usa la polilínea temporal del **próximo tramo**, sin llamadas a Google,
+sin recalcular el itinerario y sin persistir distancias/duraciones del proveedor.
+No vigila la línea de otros envíos ni un tramo ya completado. Solo opera hacia
+recolección (`GOING_TO_PICKUP`) o hacia entrega (`IN_TRANSIT`), con motorista
+habilitado, asignación aceptada automáticamente y jornada vigente. No se aplica
+a envíos especiales sin trazado, esperas en paradas, geometría vencida/ausente o
+cálculos antiguos sin desglose; en estos casos no afirmar que el motorista se
+desvió. Mantener el cálculo vial explícito existente cuando la pantalla lo indique.
+
+Valores iniciales, configurables mediante variables de entorno:
+
+| Variable | Predeterminado |
+| --- | --- |
+| `DESVIACIONES_AUTOMATICAS_HABILITADAS` | `true` |
+| `DESVIACION_RADIO_METROS` | 150 |
+| `DESVIACION_RADIO_REGRESO_METROS` | 75 |
+| `DESVIACION_PERMANENCIA_SEGUNDOS` | 60 |
+| `DESVIACION_MINIMO_PUNTOS` | 3 |
+| `DESVIACION_PRECISION_MAXIMA_METROS` | 50 |
+| `DESVIACION_ANTIGUEDAD_MAXIMA_SEGUNDOS` | 60 |
+
+Para abrir un aviso se exige una racha de al menos tres capturas que cubran
+60 segundos fuera del corredor, descontando el margen de precisión GPS. Un
+punto inválido, un cambio de sesión, un hueco superior al intervalo máximo de
+captura o un salto de velocidad imposible rompe la continuidad. La última
+captura debe ser reciente. Son valores conservadores para reducir falsos avisos;
+no se sanciona, cancela ni reasigna automáticamente el servicio.
+
+Solo se mantiene un aviso abierto por motorista. Regresar de forma estable al
+radio de regreso cierra el aviso; se aplica una permanencia de regreso de un
+cuarto del tiempo de salida (15 segundos inicialmente) y el mismo mínimo de
+puntos. También cierra al cambiar de etapa/ruta, finalizar la jornada o perder
+el trazado evaluable en una recepción posterior. Una nueva salida sostenida tras
+regresar genera un evento nuevo. Se conserva el historial para los reportes.
+
+El evento y la notificación usan el nuevo tipo `DESVIACION_RUTA`. Se notifica al
+motorista y a los administradores activos con `repartidor.ver_ubicacion` y
+`solicitud.ver` de alcance suficiente, sin avisar a administradores de otras
+empresas. En Network se exige alcance global para supervisar su flota compartida.
+La campanita conserva el contrato existente y sus enlaces navegables; la vigencia
+diaria de avisos no elimina el historial de desvíos.
+
+### Campos nuevos para el frontend
+
+`POST /api/v1/seguimiento/registros/` conserva su respuesta201 y añade:
+
+```json
+{
+  "alertas_ruta": [
+    {
+      "id": "550e8400-e29b-41d4-a716-446655440100",
+      "evento_id": "550e8400-e29b-41d4-a716-446655440101",
+      "tipo": "DESVIACION_RUTA",
+      "solicitud_id": "550e8400-e29b-41d4-a716-446655440102",
+      "tipo_parada": "RECOLECCION",
+      "detectada_en": "2026-11-03T17:00:00Z",
+      "finalizada_en": null,
+      "titulo": "Desvío de ruta detectado",
+      "mensaje": "Te has mantenido fuera del recorrido previsto. Revisa tu ruta y reporta cualquier incidencia.",
+      "ruta": "/solicitudes/550e8400-e29b-41d4-a716-446655440102"
+    }
+  ]
+}
+```
+
+Es un fragmento: se conservan recibidos/creados/repetidos/registros y
+`llegadas_detectadas`. Si no hay aviso: `alertas_ruta: []`. El mismo aviso abierto
+puede volver en lotes posteriores: deduplicar por `id`. Si `finalizada_en` deja
+de ser null, retirar su advertencia activa. Un fallo transitorio del detector no
+revierte puntos GPS ya confirmados; los lotes siguientes permiten recuperarlo.
+
+`GET /api/v1/rutas/mi-ruta/` añade `alerta_desviacion`, con ese mismo objeto o
+null. Permite recuperar una advertencia si se perdió la respuesta GPS, sin
+escribir en lecturas. `GET /api/v1/seguimiento/configuracion/` añade:
+
+```json
+{
+  "desviacion_ruta": {
+    "habilitada": true,
+    "radio_metros": 150.0,
+    "radio_regreso_metros": 75.0,
+    "permanencia_minima_segundos": 60,
+    "minimo_puntos": 3,
+    "precision_maxima_metros": 50.0,
+    "antiguedad_maxima_segundos": 60,
+    "requiere_ruta_vial_vigente": true,
+    "solo_proxima_parada": true
+  }
+}
+```
+
+El frontend debe incorporar el nuevo tipo a sus modelos, mostrar la advertencia
+en la pantalla de mapa y seguir consultando las notificaciones administrativas.
+La descarga requiere respuesta binaria (`Blob` en web o bytes en móvil) y guardar
+el nombre de Content-Disposition. Esta etapa no incorpora FCM: el push permanece
+pospuesto y una aplicación sin conexión no recibe una advertencia inmediata.
+
+### Persistencia y verificación
+
+Migraciones: `seguimiento.0004_desviacionruta`,
+`solicitudes.0010_alter_eventosolicitud_tipo` y
+`notificaciones.0004_alter_notificacionusuario_tipo`. Tabla nueva de avisos con
+referencias protegidas, fechas e índice; restricción de un desvío abierto por
+motorista. Los eventos y notificaciones se crean en la misma transacción, con
+bloqueo solicitud→motorista→jornada, después del commit de recepción GPS.
+
+La suite completa sobre PostgreSQL aislado aprobó979casos sin omisiones, seguida
+de28pruebas finales de los formatos binarios, permisos y modos Corporate/Network.
+PDF de muestra ficticia abierto y renderizado; Excel leído nuevamente y validado
+contra sus datos. Se bloquearon llamadas reales a Google durante las pruebas.
+Arranque y despliegue vigente en DOCKER.md; publicar el código en Render para
+que esos endpoints/campos estén disponibles en su URL pública.
+
+## 0.51.0 — Departamento fijo de operación (2026-11-03)
+
+Aplica a **Corporate y Network**. El administrador asigna a cada motorista un
+país y un departamento fijo. La sucursal aporta su departamento mediante
+`ubicacion.nivel_administrativo_1`, presentado como «Departamento» en la interfaz.
+La cobertura se compara con la **ubicación de recolección de la solicitud**.
+No se obtiene el departamento del motorista a partir de su GPS.
+
+Antes de ordenar por cercanía, el backend exige país/departamento coincidentes,
+alcance de flota, rol, jornada vigente, ausencia de almuerzo y cupo suficiente
+de solicitudes, tubos y frascos, conservando las restricciones de prioritarios
+y especiales. La asignación manual, las reasignaciones y sus revalidaciones
+transaccionales aplican la misma cobertura. Cortés no recibe recolecciones de
+Francisco Morazán, aunque su última posición GPS esté cerca de ese origen.
+La cercanía sigue siendo geográfica en línea recta; no se hacen llamadas nuevas
+a Google para determinar territorio o escoger motorista.
+
+Corporate mantiene su flota exclusiva por empresa. Network conserva su flota
+global entre clientes, segmentada ahora por país y departamento del motorista.
+La regla limita la recolección; no introduce una restricción nueva al destino
+de Network. Corporate `ENTRE_SUCURSALES` conserva la misma empresa, país y
+departamento de origen y destino. No cambia el orden de paradas ni el mapa.
+
+### Campos de lectura y perfiles anteriores
+
+El objeto existente de motorista, tanto en listado como en detalle, creación,
+operación y `GET repartidores/mi-perfil/`, incorpora estos campos:
+
+```json
+{
+  "pais_operacion_id": "6e143abc-1ab5-4420-8534-3ad62823135a",
+  "departamento_operacion": "Cortés",
+  "cobertura_configurada": true
+}
+```
+
+Este fragmento muestra solamente los campos nuevos; el resto del objeto se
+conserva. `pais_operacion_id` es UUID o null y `departamento_operacion` es texto.
+`cobertura_configurada` no sustituye a `puede_recibir_solicitudes`: un perfil
+configurado puede estar desconectado, en almuerzo, lleno o sin jornada vigente.
+
+**La migración no deduce el territorio de perfiles anteriores**. En esos casos:
+
+```json
+{
+  "pais_operacion_id": null,
+  "departamento_operacion": "",
+  "cobertura_configurada": false,
+  "puede_recibir_solicitudes": false
+}
+```
+
+El administrador debe configurar su departamento antes de que reciban servicios
+nuevos. La migración conserva los servicios ya asignados y todos los históricos.
+No cancela ni reasigna servicios por dejar esa configuración pendiente.
+
+### Opciones para el formulario administrativo
+
+Corporate:
+
+```http
+GET /api/v1/repartidores/departamentos/?empresa_id=3b0407a3-bc31-4d31-9619-7a3f01ac0b96
+Authorization: Bearer <token>
+```
+
+Network:
+
+```http
+GET /api/v1/repartidores/departamentos/
+Authorization: Bearer <token>
+```
+
+Ambos aceptan el filtro opcional `pais_operacion_id`. Exigen
+`repartidor.administrar` en la empresa Corporate o con alcance global en
+Network. Corporate requiere `empresa_id`; Network lo rechaza porque la flota
+es compartida. Ejemplo de respuesta completa `200`:
+
+```json
+{
+  "departamentos": [
+    {
+      "pais_operacion_id": "6e143abc-1ab5-4420-8534-3ad62823135a",
+      "pais_nombre": "Honduras",
+      "departamento_operacion": "Cortés"
+    }
+  ]
+}
+```
+
+Son sugerencias deduplicadas procedentes de ubicaciones de recolección activas
+y autorizadas para las empresas activas del alcance indicado. No es un catálogo
+nacional completo. Si no hay opciones devuelve `200` con `{"departamentos":[]}`.
+El administrador puede introducir otro departamento; debe coincidir con el
+nombre registrado en los orígenes que atenderá. Se normalizan espacios,
+mayúsculas y acentos: «Cortes» y «Cortés» se consideran iguales dentro del
+mismo país. No se cambian las coordenadas de sucursales ni se llama a geocodificación.
+
+### Configurar o cambiar la cobertura
+
+```http
+PATCH /api/v1/repartidores/{repartidor_id}/cobertura/
+Authorization: Bearer <token>
+Content-Type: application/json
+```
+
+Corporate, país obtenido de la empresa del motorista:
+
+```json
+{
+  "departamento_operacion": "Cortés",
+  "motivo": "Asignación administrativa del departamento de operación"
+}
+```
+
+Network, país explícito y flota global:
+
+```json
+{
+  "pais_operacion_id": "6e143abc-1ab5-4420-8534-3ad62823135a",
+  "departamento_operacion": "Cortés",
+  "motivo": "Asignación administrativa del departamento de operación"
+}
+```
+
+`departamento_operacion` es obligatorio, no vacío y de hasta150caracteres;
+`motivo` es obligatorio, no vacío y de hasta1000caracteres. En Corporate se puede
+enviar el país, pero debe coincidir con el de la empresa. El país debe estar
+activo. No acepta campos adicionales ni capacidad o límites manuales.
+
+Respuesta `200`: **objeto completo de motorista existente**, sin sobre, con los
+campos nuevos ya configurados. El backend bloquea la fila del motorista durante
+la operación, registra administrador, motivo y cobertura anterior/nueva en su
+historial operativo y programa el reintento de solicitudes pendientes tras el
+commit. Cambiar la cobertura no garantiza asignación si faltan otros requisitos.
+
+**No puede cambiarse mientras tenga servicios activos**: deberá terminarlos o
+reasignarlos primero. Esta condición también se aplica al configurar un perfil
+antiguo con servicios todavía activos. Se rechazan cambios sin efecto.
+El motorista no puede modificar su propio departamento con su permiso operativo.
+Usar este endpoint específico; `PATCH {id}/operacion/` sigue dedicado al estado
+y `PATCH {id}/` no administra cobertura ni límites individuales.
+
+Ejemplo exacto de error de negocio `400`:
+
+```json
+{
+  "departamento_operacion": "Debe finalizar o reasignar sus servicios activos antes de cambiar el departamento."
+}
+```
+
+Otros errores conservan las claves `pais_operacion_id`, `departamento_operacion`,
+`empresa_id` o `motivo`; validaciones de formulario pueden devolver listas de
+mensajes por campo. Falta de permiso: `403` con `detail`; UUID inexistente:
+`404`. No se transforman en errores de conexión.
+
+### Listado y candidatos de una solicitud
+
+`GET /api/v1/repartidores/` y `GET /api/v1/repartidores/disponibles/` aceptan
+además `pais_operacion_id`, `departamento_operacion` y `cobertura_configurada`
+(`true` o `false`). Conservan paginación y permisos existentes.
+Para mostrar los perfiles pendientes de configurar:
+
+```http
+GET /api/v1/repartidores/?cobertura_configurada=false
+```
+
+Para elegir o reasignar un motorista, el frontend debe consultar:
+
+```http
+GET /api/v1/repartidores/disponibles/?solicitud_id={solicitud_id}
+```
+
+Así se filtran país/departamento de la recolección, alcance de flota y cupo para
+las cantidades reales de esa solicitud. Las cantidades del servicio prevalecen
+sobre filtros de cantidad enviados por el cliente. Solicitud fuera de alcance
+o inexistente: `404`; falta de permiso para consultarla: `403`. Sin candidatos:
+sobre paginado `200` con `conteo:0` y `resultados:[]`; mostrar un estado vacío.
+Sin `solicitud_id`, disponibles devuelve la flota disponible del alcance, que
+puede incluir varios departamentos; no equivale a candidatos de un servicio.
+La asignación final vuelve a validar todos los requisitos dentro de su transacción.
+
+`POST /api/v1/repartidores/` también acepta cobertura al crear el perfil.
+Corporate requiere departamento y obtiene el país de la empresa; Network
+requiere ambos. Omitir ambos sigue permitido para preparar un perfil pendiente.
+El país solo no configura un perfil; el departamento solo en Network tampoco.
+
+### Integración y despliegue
+
+El frontend administrativo debe añadir el formulario de cobertura, identificar
+los perfiles pendientes y usar `solicitud_id` al consultar candidatos. El móvil
+puede leer los campos nuevos en su perfil; no obtiene autorización para editarlos.
+No cambia autenticación, jornada, cupos configurados o captura GPS.
+
+Migración: `repartidores.0005_cobertura_departamento`, con país nullable, nombre
+y clave normalizada, índice de búsqueda y restricción de campos coherentes.
+La suite completa aprobó1000pruebas con PostgreSQL aislado, sin omisiones ni
+llamadas reales a Google. Debe desplegarse esta versión también en Render para
+que su URL pública tenga los endpoints nuevos.
+
+## 0.52.0 — Legibilidad de reportes Excel y PDF (2026-11-03)
+
+Se conserva `GET /api/v1/reportes/motoristas/descargar/`, los filtros y permisos,
+los formatos `xlsx` y `pdf`, las cinco hojas habituales de Excel y todos los datos
+operativos. El contenido sigue generado en memoria y protegido por Bearer.
+
+Excel calcula la altura necesaria de cada fila según los textos y saltos de
+línea. Para una descripción especialmente larga puede ampliar su columna hasta
+60unidades. Conserva los números y fechas como valores tipados y evita ejecutar
+fórmulas procedentes de texto de usuarios.
+
+Excel tiene límites físicos:409.5puntos de altura por fila y32767caracteres por
+celda. Si un texto no cabe aun después del ajuste, se rechaza la descarga con
+`400` y clave estable `formato`, sin truncar datos ni devolver un error de
+conexión. Ejemplos completos:
+
+```json
+{
+  "formato": "Un texto supera la altura máxima de Excel. Descargue el reporte en PDF para verlo completo."
+}
+```
+
+```json
+{
+  "formato": "Un texto supera los 32767 caracteres por celda de Excel. Descargue el reporte en PDF."
+}
+```
+
+El frontend debe mostrar el mensaje y permitir que administración elija la
+descarga PDF con los mismos filtros. No necesita cambiar el parseo de datos ni
+los nombres de archivo.
+
+PDF presenta cada servicio con un encabezado propio que incluye su número de
+solicitud. Ese encabezado se repite si el detalle ocupa varias páginas. Los
+títulos de sección permanecen junto a su contenido. Las fuentes se incorporan
+al archivo para conservar acentos, caracteres CJK y emojis monocromos compatibles,
+incluida la selección/copia de caracteres fuera del plano Unicode básico.
+Un carácter que no exista en ninguna de las fuentes se representa explícitamente
+como `[U+XXXX]`, en lugar de desaparecer o convertirse en un cuadro sin identificar.
+El texto sigue escapado: un nombre que contenga marcado no modifica el documento.
+
+Las fuentes y licencias se distribuyen con el backend; la descarga no consulta
+proveedores de fuentes ni requiere acceso a Google. No hay cambios de base de
+datos ni migración nueva. El código debe desplegarse también en Render para
+actualizar el generador del servicio público.
+
+## 0.53.0 — Rendimiento de consultas y exportaciones (2026-11-04)
+
+Se mantienen los endpoints y contratos existentes. El frontend no necesita
+cambiar modelos, filtros ni llamadas. Siguen vigentes los permisos por empresa
+y sucursal, la comprobación de revocaciones, los errores de campo y las reglas
+operativas, incluidos jornada, almuerzo, cupos y asignación por departamento.
+
+Las consultas de permisos se agrupan por petición; no se guardan decisiones de
+autorización entre peticiones. Las consultas de detalle de reportes seleccionan
+solo los campos necesarios. Las fotografías siguen fuera de esas lecturas.
+
+Excel lleva el índice de filas al escribir en lugar de recorrer repetidamente
+la hoja completa. Reutiliza mediciones de texto solo dentro de esa descarga.
+PDF conserva el cálculo de líneas de cada párrafo mientras no cambie su ancho,
+y mantiene la división entre páginas y las fuentes Unicode de 0.52.
+
+Mediciones locales con datos ficticios variados, solo de generación del archivo
+(sin consultas a PostgreSQL ni transferencia por red):
+
+| Caso | Antes | Después |
+|---|---|---|
+| Excel con 2,000 servicios | 9.132 s | 1.589 s |
+| PDF con 1,000 servicios | 3.016 s | 2.337 s |
+
+En el mismo escenario de autorización de un usuario de empresa, las consultas
+para listar solicitudes pasan de 5 a 3, las de tipos de servicio de 3 a 2 y la
+preparación de datos del reporte de 20 a 16. Son mediciones de ese escenario,
+no una garantía de latencia para todas las cuentas, equipos o volúmenes.
+
+La comparación de los archivos confirma iguales valores, formatos y dimensiones
+de Excel y páginas PDF visualmente idénticas en los casos normal, vacío, texto
+largo y Unicode. Se conserva `Cache-Control: no-store, private` en las descargas.
+No hay migración nueva. Desplegar esta versión también en Render para que el
+backend público aproveche las mejoras.
+
+## 0.54.0 — Consultas operativas y administrativas (2026-11-04)
+
+La revisión abarca usuarios/roles, empresas, sucursales, ubicaciones, vehículos,
+motoristas y disponibilidad, avisos, solicitudes, resúmenes, jornadas,
+incidencias, rutas/versiones y seguimiento GPS. Autenticación mantiene la
+validación de sesión vigente en cada petición, los diez intentos y la rotación
+de tokens. No cambia ningún endpoint, campo JSON, filtro ni regla operativa.
+El frontend web y móvil no requieren adaptar sus llamadas.
+
+Seguimiento y evidencias comprueban acceso a la solicitud sin cargar artículos
+históricos, eventos, movimientos y asignaciones que esas respuestas no muestran.
+El detalle completo de la solicitud conserva dichos historiales. Los permisos
+de jornadas, incidencias, rutas y creación se leen en lote dentro de la petición,
+sin almacenar autorizaciones entre peticiones. Se retiran relaciones que los
+serializadores no usan y se reutiliza el perfil al consultar la jornada propia.
+
+El conteo de cupos del motorista utiliza el índice existente por motorista/estado
+y consulta exclusivamente las solicitudes activas. Evita unir y agrupar sus
+servicios históricos. Conserva los cupos independientes de tubos/frascos, valores
+desconocidos, almuerzo, prioridades, cobertura, jornada, bloqueos transaccionales
+y comprobación final al asignar. No se elimina ningún histórico.
+
+Medición de peticiones con usuario de empresa, datos ficticios y autenticación
+ya resuelta; incluye paginación y serialización, sin red ni mantenimiento:
+
+| Lectura | Consultas SQL antes | Después |
+|---|---:|---:|
+| Seguimiento de solicitud | 13 | 6 |
+| Evidencias de solicitud | 12 | 5 |
+| Detalle de solicitud | 9 | 6 |
+| Roles de un usuario | 5 | 3 |
+| Opciones entre sucursales con origen elegido | 6 | 4 |
+| Resumen del solicitante | 6 | 5 |
+| Jornada activa propia | 7 | 5 |
+| Listados de jornadas/incidencias | 5 | 4 |
+| Historial de rutas | 4 | 3 |
+
+Se midieron 33 lecturas HTTP distintas. Los listados ya acotados conservan su
+número de consultas; no se reescriben innecesariamente. En una comparación local
+SQLite con 20,000 servicios terminales ficticios y dos motoristas, la consulta de
+carga del listado pasó de 410.460 a 1.261 ms y la de disponibles de 476.651 a 8.190 ms,
+con idénticos resultados. Es una medición sintética del SQL, no una promesa de
+latencia en PostgreSQL, Render, la red o cualquier volumen de datos.
+
+Verificación: 1,033 pruebas completas en PostgreSQL aislado, incluidas 16 regresiones
+de consultas en Corporate/Network: paginación sin consultas adicionales por fila,
+revocación inmediata, aislamiento por empresa, historiales del detalle, cupos y
+lectura del estado de ruta fallida. Además, 28 lecturas reales de Corporate
+respondieron 200 en transacción READ ONLY, sin sesiones, datos de prueba ni
+modificaciones. Sin modelos, índices o migraciones nuevas. Docker local 0.54;
+el servicio público de Render necesita desplegar esta versión por separado.
+
+## 0.55.0 — Captura GPS cercana y apertura de evidencia (2026-11-04)
+
+Implementado en Corporate y Network. El backend publica una política temporal
+para que Flutter obtenga y envíe más puntos cerca de la próxima parada. La
+configuración del servidor no cambia por sí sola la frecuencia del GPS Android:
+la aplicación móvil debe consumir los nuevos campos. Las frecuencias normales
+se conservan: movimiento 5 s, detenido 15 s, envío 20 s, salvo configuración propia.
+
+### Configuración y objetivo
+
+`GET /api/v1/seguimiento/configuracion/`, autenticado, añade este objeto dentro
+de `llegada_automatica`; los demás campos se conservan:
+
+```json
+{
+  "captura_cercana": {
+    "habilitada": true,
+    "radio_activacion_metros": 250.0,
+    "radio_desactivacion_metros": 350.0,
+    "intervalo_captura_segundos": 5,
+    "intervalo_envio_segundos": 5,
+    "enviar_al_entrar": true,
+    "aplica_detenido": true
+  }
+}
+```
+
+`GET /api/v1/rutas/mi-ruta/`, con su autorización existente, añade
+`captura_cercana` en el nivel raíz. Reutiliza las paradas ya leídas y la jornada;
+no consulta Google ni añade consultas SQL. Ejemplo durante la recolección:
+
+```json
+{
+  "captura_cercana": {
+    "habilitada": true,
+    "radio_activacion_metros": 250.0,
+    "radio_desactivacion_metros": 350.0,
+    "intervalo_captura_segundos": 5,
+    "intervalo_envio_segundos": 5,
+    "enviar_al_entrar": true,
+    "aplica_detenido": true,
+    "objetivo": {
+      "solicitud_id": "d43f3df0-16f6-4bd8-80d2-37ee193d86c2",
+      "tipo_parada": "RECOLECCION",
+      "ubicacion_id": "441dd410-6859-4f81-8715-a26e03ba9521",
+      "latitud": "14.072300",
+      "longitud": "-87.192100"
+    }
+  }
+}
+```
+
+Identificadores y coordenadas del ejemplo son ficticios. El objetivo corresponde
+exclusivamente a `proxima_parada`: `RECOLECCION` en `GOING_TO_PICKUP` o `ENTREGA`
+en `IN_TRANSIT`, con coordenadas, jornada vigente y motorista `AVAILABLE` u
+`ON_ROUTE`. Al confirmar la llegada, no tener jornada vigente, pausar al motorista,
+quedar sin paradas o tener un destino especial sin coordenadas, devuelve
+`habilitada: false` y `objetivo: null`, manteniendo los demás campos numéricos.
+Un especial con origen registrado sí admite aproximación a su recolección.
+Los radios de aproximación no cambian el radio de confirmación de llegada.
+
+### Implementación requerida en Flutter
+
+1. Usar el objetivo publicado por mi-ruta; el motorista no elige recolección,
+   entrega ni otro pedido. Medir la distancia con cada ubicación real recibida
+   del teléfono, sin solicitar una ruta de Google para este cálculo.
+2. Con `habilitada=true` y distancia menor o igual a 250 m, entrar en modo
+   cercano: solicitar capturas precisas cada 5 s y enviar la cola cada 5 s.
+   Aplicar también estando detenido; no condicionar las capturas a recorrer
+   una distancia mínima. Si ya se usa una frecuencia más rápida, conservarla.
+3. Al entrar, obtener una captura nueva y enviar la cola pendiente inmediatamente,
+   sin esperar el envío normal. Conservar `id_cliente`, sesión GPS, secuencia
+   y fechas reales de los puntos; no reiniciar la sesión por cambiar frecuencia.
+4. Permanecer en ese modo mientras la distancia sea menor o igual a 350 m.
+   Salir al superar 350 m; entre 250 y 350 m conservar el modo anterior. Esto
+   evita alternar frecuencias por pequeñas variaciones del GPS.
+5. Procesar **cada respuesta 201** de `POST /api/v1/seguimiento/registros/`.
+   Si `llegadas_detectadas` contiene un evento, abrir de inmediato su pantalla
+   de evidencia para tomar la foto, deduplicando por `evento_id`. No esperar
+   el siguiente temporizador de mi-ruta ni confirmar la llegada localmente.
+6. Retirar el objetivo confirmado y volver al modo normal. Actualizar mi-ruta
+   tras cambios de asignación/etapa y después de guardar la foto. Reiniciar
+   el modo cercano si cambia `(solicitud_id, tipo_parada, ubicacion_id)`; evaluar
+   la nueva distancia. Con objetivo nulo o `habilitada=false`, salir del modo.
+7. Al reabrir/reanudar la app, recuperar la llegada mediante `llegada_actual`
+   de mi-ruta y deduplicar el mismo evento. Si la jornada ya terminó, detener
+   la captura según `seguimiento_jornada` de la configuración existente.
+8. Si la precisión supera 20 m, mostrar que se está esperando mejor señal.
+   Conservar las muestras reales: el backend decide cuáles acreditan llegada.
+
+El servidor sigue exigiendo radio de 50 m, precisión conocida de hasta 20 m,
+tres capturas distintas consecutivas, permanencia mínima de 10 s tanto en las
+capturas como en las recepciones del servidor, puntos recientes y asignación,
+rol y jornada vigentes. Un único lote con fechas distintas no acredita espera.
+La llegada habilita la foto; no completa la recolección o entrega sin evidencia.
+
+La prueba HTTP automatizada con tres envíos reales simulados en t=0, t=5 y t=10 s
+confirma la llegada en la tercera respuesta, permite recuperar el mismo evento
+y no duplica la llegada al repetir el lote. Es un escenario controlado con GPS
+válido; la frecuencia solicitada no garantiza el tiempo efectivo de Android,
+la calidad de señal ni la latencia de la red en un teléfono físico.
+
+Variables opcionales, con sus valores iniciales:
+
+```dotenv
+INTERVALO_GPS_CERCANO_SEGUNDOS=5
+RADIO_CAPTURA_CERCANA_METROS=250
+RADIO_SALIDA_CAPTURA_CERCANA_METROS=350
+```
+
+El intervalo debe ser positivo y no superar el máximo entre capturas; los radios
+deben ser finitos y cumplir `RADIO_LLEGADA_METROS < RADIO_CAPTURA_CERCANA_METROS <
+RADIO_SALIDA_CAPTURA_CERCANA_METROS`. La respuesta utiliza el mínimo entre la
+frecuencia cercana y las frecuencias normales, para no ralentizar un cliente
+configurado más rápido. Sin migración nueva ni cambios de credenciales o puertos.
+
+Validación de esta versión: 1,045 pruebas completas en PostgreSQL aislado,
+incluidas 12 regresiones nuevas de configuración, contrato, límites, jornada,
+pausa, aislamiento, Network y respuesta HTTP. Mi-ruta mantiene 10 consultas y
+configuración GPS 4 en el mismo escenario de empresa usado en 0.54. Verificadas
+28 lecturas reales sobre Corporate en transacción READ ONLY, incluidos los campos
+nuevos. No se crearon sesiones ni datos de prueba en la base real. El backend
+público de Render requiere desplegar esta versión; Flutter debe integrar la
+política descrita para que cambie la experiencia del teléfono.
+
+## 0.56.0 — Rendimiento del GPS con carga y preparación de imágenes (2026-11-04)
+
+Se conservan los endpoints, permisos, JSON, fechas y estados de las respuestas.
+No requiere nuevas llamadas del frontend. La captura cercana de 0.55 mantiene
+sus pasos de integración en Flutter y sus validaciones de llegada.
+
+### Reintentos disparados por GPS
+
+En Corporate, un envío GPS con puntos nuevos y ubicación vigente comprueba si
+hay pendientes y algún motorista elegible de la empresa antes de recorrer la
+cola. Si la flota está llena, en almuerzo, sin jornada/rol/cobertura/vehículo
+válidos o sin GPS vigente cuando es obligatorio, evita repetir hasta 50 búsquedas.
+La comprobación es de toda la flota de la empresa: el GPS de un motorista lleno
+puede seguir provocando una asignación a otro que tenga cupo y ubicación vigente.
+
+No se cachea la disponibilidad entre peticiones ni se añade una espera mínima.
+Cuando se libera un cupo o vuelve un motorista, los eventos existentes vuelven
+a evaluar la cola. Si hay elegibles, se conserva el algoritmo de cercanía y se
+revalidan cupos, departamento, prioridades, jornada y rol bajo los mismos bloqueos.
+El reintento general conserva sus cierres de solicitudes vencidas y su límite
+de procesamiento por evento. El cierre diario mantiene su tarea independiente.
+Network conserva su flujo de asignación existente.
+
+La consulta de una pendiente carga también el país de su empresa, evitando
+leerlo por separado para calcular su vigencia. La recepción de lotes GPS utiliza
+un conjunto de identificadores para validar secuencias nuevas, sin comparar
+cada diccionario con la lista completa de puntos del lote.
+
+### Fotografías de solicitudes e incidencias
+
+La imagen se valida y convierte a Base64 antes de bloquear las filas del
+servicio. Después se verifican propiedad, permisos y estado bajo bloqueo, se
+establece la hora oficial del servidor y se guardan imagen/eventos/transiciones
+en la transacción correspondiente. No se adelanta la autorización de la operación.
+Se mantienen los bytes originales, los límites de tamaño/formato/píxeles, la
+retención mensual y la respuesta de evidencia. La lectura de autorización de una
+incidencia omite los eventos históricos que no necesita para adjuntar la foto.
+
+### Mediciones y alcance
+
+Comparación local con PostgreSQL temporal exclusivo, 10 motoristas ficticios,
+cinco servicios activos por motorista, JWT/sesiones reales de prueba, y GPS,
+fotografías y PDF por los endpoints existentes. Las pruebas normales y con cola
+usan 20 peticiones cada una; la concurrencia usa dos grupos de diez. La carga mixta
+combina diez envíos GPS, una fotografía JPEG de prueba y un PDF administrativo.
+
+| Escenario | Mediana antes | Mediana después | Consultas SQL medianas antes → después |
+|---|---:|---:|---:|
+| GPS sin pendientes | 93.32 ms | 91.96 ms | 43 → 43 |
+| GPS, flota llena y 50 pendientes | 1,339.35 ms | 108.35 ms | 192 → 44 |
+| 10 motoristas simultáneos, flota llena y 50 pendientes | 10,321.77 ms | 826.21 ms | 190 → 44 |
+| GPS simultáneo con foto y PDF, flota llena y 50 pendientes | 10,886.85 ms | 1,111.99 ms | 188.5 → 44 |
+
+Son tiempos de la aplicación Django y PostgreSQL aislados; no incluyen la red
+del teléfono ni reproducen la cola HTTP y los recursos de Gunicorn/Render.
+Miden ese escenario con la flota llena y no garantizan tiempos para toda carga
+o infraestructura. Las muestras individuales de foto/PDF no permiten atribuir
+una mejora de latencia a esos endpoints. Su objetivo fue comprobar la operación
+mixta; el cambio de las fotos reduce el trabajo realizado mientras se mantienen
+los bloqueos, sin afirmar que toda subida de imagen será más rápida.
+
+Las lecturas repetidas de paradas y la revalidación de llegadas/desvíos conservan
+sus controles. En la medición inicial sumaban aproximadamente 8 ms de avance,
+24 ms de llegada y 23 ms de desvío por petición secuencial. Se priorizó retirar
+la búsqueda inútil de asignaciones, que consumía unos 1,250 ms con la flota llena.
+No se cachean datos operativos ni se eliminan comprobaciones para reducir esos
+tiempos. Sin nuevos servidores, dependencias, índices o migraciones.
+
+Verificación: 1,049 pruebas completas PostgreSQL aprobadas, con cuatro regresiones
+nuevas. Una comprueba que pasar de una a 50 pendientes no aumenta las consultas
+del GPS cuando la flota está llena; otra confirma la asignación al liberar un
+cupo; otra conserva la asignación a un segundo motorista con GPS vigente aunque
+quien envía esté lleno. La prueba concurrente de foto suspende su preparación y
+comprueba que el GPS del mismo motorista termina antes de liberarla, verificando
+después los bytes Base64 y las fechas oficiales. `check` y `makemigrations --check`
+sin incidencias. La publicación del código en Render se realiza por separado.
+
+Docker local 0.56.0 activo y saludable en ambos puertos, conservando las mismas
+bases, claves y configuración de conexión. Cero migraciones pendientes en ambos
+servicios. Además, 28 lecturas reales de Corporate respondieron 200 en transacción
+READ ONLY, sin crear sesiones ni modificar datos operativos.

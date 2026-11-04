@@ -11,6 +11,7 @@ abstract interface class FleetRepository {
   });
   Future<PaginatedResult<DriverProfile>> getDrivers(DriverQuery query);
   Future<PaginatedResult<DriverProfile>> getAvailableDrivers({
+    String? requestId,
     int? tubeCount,
     int? flaskCount,
   });

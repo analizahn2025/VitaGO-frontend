@@ -9,6 +9,9 @@ import 'package:vitago_app/core/time/server_time_clock.dart';
 import 'package:vitago_app/features/shifts/controllers/shifts_controller.dart';
 import 'package:vitago_app/features/shifts/models/driver_shift.dart';
 import 'package:vitago_app/features/tracking/models/tracking_configuration.dart';
+import 'package:vitago_app/features/tracking/models/nearby_capture_policy.dart';
+import 'package:vitago_app/features/routes/models/driver_route.dart';
+import 'package:vitago_app/features/routes/providers/routes_providers.dart';
 import 'package:vitago_app/features/tracking/models/tracking_point.dart';
 import 'package:vitago_app/features/tracking/controllers/driver_tracking_status_controller.dart';
 import 'package:vitago_app/features/tracking/providers/tracking_providers.dart';
@@ -17,6 +20,110 @@ import 'package:vitago_app/features/tracking/services/tracking_queue_coordinator
 import 'package:vitago_app/features/tracking/widgets/driver_automatic_tracking.dart';
 
 void main() {
+  testWidgets(
+    'cerca de la parada captura detenido cada 5 s y envía al entrar',
+    (tester) async {
+      var elapsed = Duration.zero;
+      final service = _LocationService();
+      service.currentLocation = _location(0, latitude: 14.078);
+      final queue = _QueueCoordinator();
+      addTearDown(service.locations.close);
+      final policy = NearbyCapturePolicy.fromJson({
+        'habilitada': true,
+        'radio_activacion_metros': 250,
+        'radio_desactivacion_metros': 350,
+        'intervalo_captura_segundos': 5,
+        'intervalo_envio_segundos': 5,
+        'enviar_al_entrar': true,
+        'aplica_detenido': true,
+        'objetivo': {
+          'solicitud_id': 'request-1',
+          'tipo_parada': 'RECOLECCION',
+          'ubicacion_id': 'location-1',
+          'latitud': '14.072300',
+          'longitud': '-87.192100',
+        },
+      });
+      final route = DriverRoute(
+        driverId: 'driver-id',
+        shiftId: 'shift-id',
+        orderType: 'ASIGNACION',
+        routeCalculated: false,
+        stops: const [],
+        map: const RouteMapConfiguration(
+          mode: 'INTEGRADO',
+          provider: 'GOOGLE_MAPS',
+          showMap: true,
+          showRoute: false,
+          allowsExternalNavigation: false,
+        ),
+        roadRoute: const RoadRoute(
+          status: 'NO_CALCULADA',
+          provider: 'GOOGLE_MAPS',
+          includesCompletedSegments: false,
+          metricsInResponse: false,
+        ),
+        nearbyCapture: policy,
+      );
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            activeShiftControllerProvider.overrideWith((ref) async => _shift),
+            locationServiceEnabledProvider.overrideWith(
+              (ref) => Stream.value(true),
+            ),
+            deviceLocationServiceProvider.overrideWithValue(service),
+            serverTimeClockProvider.overrideWithValue(
+              ServerTimeClock.withElapsedReader(() => elapsed),
+            ),
+            trackingRepositoryProvider.overrideWithValue(
+              _TrackingRepository(null, policy, 10),
+            ),
+            trackingQueueCoordinatorProvider.overrideWithValue(queue),
+            myRouteProvider.overrideWith((ref) async => route),
+          ],
+          child: const MaterialApp(
+            home: DriverAutomaticTracking(enabled: true, child: SizedBox()),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(queue.captured, hasLength(1));
+      expect(service.interval, const Duration(seconds: 10));
+      final before = queue.flushCalls;
+      final firstSend = Completer<void>();
+      queue.nextFlushGate = firstSend.future;
+      elapsed = const Duration(seconds: 5);
+      service.currentLocation = _location(0, latitude: 14.0730);
+      service.locations.add(service.currentLocation!);
+      await tester.pumpAndSettle();
+      expect(queue.flushCalls, before + 1);
+      firstSend.complete();
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 10)),
+      );
+      await tester.pump();
+      expect(queue.flushCalls, greaterThan(before + 1));
+      expect(service.currentLocationCalls, greaterThanOrEqualTo(2));
+      expect(service.interval, const Duration(seconds: 5));
+      final capturedNear = queue.captured.length;
+      elapsed = const Duration(seconds: 10);
+      service.locations.add(_location(0, latitude: 14.0731));
+      await tester.pumpAndSettle();
+      expect(queue.captured.length, capturedNear + 1);
+      elapsed = const Duration(seconds: 15);
+      service.locations.add(_location(0, latitude: 14.0760));
+      await tester.pumpAndSettle();
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 10)),
+      );
+      await tester.pump();
+      expect(service.interval, const Duration(seconds: 10));
+      expect(queue.captured.length, capturedNear + 1);
+      await tester.pumpWidget(const SizedBox());
+    },
+  );
+
   testWidgets('la configuración de jornada deshabilitada no abre el GPS', (
     tester,
   ) async {
@@ -379,7 +486,8 @@ class _LocationService extends DeviceLocationService {
   _LocationService({this.firstLocation});
 
   final Future<DeviceLocation>? firstLocation;
-  final locations = StreamController<DeviceLocation>();
+  final locations = StreamController<DeviceLocation>.broadcast();
+  DeviceLocation? currentLocation;
   Duration? interval;
   int currentLocationCalls = 0;
 
@@ -389,7 +497,7 @@ class _LocationService extends DeviceLocationService {
   @override
   Future<DeviceLocation> getCurrentLocation() async {
     currentLocationCalls++;
-    return firstLocation ?? _location(0);
+    return firstLocation ?? currentLocation ?? _location(0);
   }
 
   @override
@@ -400,16 +508,22 @@ class _LocationService extends DeviceLocationService {
 }
 
 class _TrackingRepository implements TrackingRepository {
-  _TrackingRepository([this.shiftTracking]);
+  _TrackingRepository([
+    this.shiftTracking,
+    this.nearbyCapture,
+    this.movingCaptureSeconds = 5,
+  ]);
 
   final ShiftTrackingConfiguration? shiftTracking;
+  final NearbyCapturePolicy? nearbyCapture;
+  final int movingCaptureSeconds;
 
   @override
   Future<TrackingConfiguration> getConfiguration() async =>
       TrackingConfiguration(
         serverTime: _serverTime,
         operationalTimeZone: 'America/Tegucigalpa',
-        movingCaptureSeconds: 5,
+        movingCaptureSeconds: movingCaptureSeconds,
         stoppedCaptureSeconds: 15,
         sendIntervalSeconds: 20,
         maximumBatchSize: 200,
@@ -419,6 +533,7 @@ class _TrackingRepository implements TrackingRepository {
         maximumMeasurementIntervalSeconds: 30,
         minimumCoveragePercentage: 90,
         shiftTracking: shiftTracking,
+        nearbyCapture: nearbyCapture,
       );
 
   @override
@@ -431,6 +546,7 @@ class _QueueCoordinator implements TrackingQueueCoordinator {
   final Future<void>? restore;
   final captured = <TrackingPointInput>[];
   int flushCalls = 0;
+  Future<void>? nextFlushGate;
 
   @override
   Future<TrackingPointInput> capture(
@@ -456,6 +572,9 @@ class _QueueCoordinator implements TrackingQueueCoordinator {
   @override
   Future<int> flush(String shiftId, {required int maximumBatchSize}) async {
     flushCalls++;
+    final gate = nextFlushGate;
+    nextFlushGate = null;
+    if (gate != null) await gate;
     return 0;
   }
 

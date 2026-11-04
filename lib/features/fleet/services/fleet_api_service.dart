@@ -83,6 +83,7 @@ class FleetApiService {
   }
 
   Future<PaginatedResult<DriverProfile>> getAvailableDrivers({
+    String? requestId,
     int? tubeCount,
     int? flaskCount,
     int page = 1,
@@ -94,8 +95,9 @@ class FleetApiService {
         queryParameters: {
           'pagina': page,
           'tamano_pagina': pageSize,
-          'cantidad_tubos': ?tubeCount,
-          'cantidad_frascos': ?flaskCount,
+          'solicitud_id': ?requestId,
+          if (requestId == null) 'cantidad_tubos': ?tubeCount,
+          if (requestId == null) 'cantidad_frascos': ?flaskCount,
         },
       );
       return PaginatedResult.fromJson(

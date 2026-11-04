@@ -7,8 +7,10 @@ import 'package:vitago_app/core/errors/app_failure.dart';
 import 'package:vitago_app/features/shifts/controllers/shifts_controller.dart';
 import 'package:vitago_app/features/tracking/controllers/driver_tracking_status_controller.dart';
 import 'package:vitago_app/features/tracking/models/tracking_configuration.dart';
+import 'package:vitago_app/features/tracking/models/nearby_capture_policy.dart';
 import 'package:vitago_app/features/tracking/providers/tracking_providers.dart';
 import 'package:vitago_app/features/tracking/controllers/driver_arrivals_controller.dart';
+import 'package:vitago_app/features/routes/providers/routes_providers.dart';
 
 class DriverAutomaticTracking extends ConsumerStatefulWidget {
   const DriverAutomaticTracking({
@@ -35,6 +37,7 @@ class _DriverAutomaticTrackingState
   String? _shiftId;
   bool _starting = false;
   bool _sending = false;
+  bool _flushRequested = false;
   bool _retryBlockedByValidation = false;
   bool? _lastGpsEnabled;
   bool _gpsDialogOpen = false;
@@ -42,6 +45,13 @@ class _DriverAutomaticTrackingState
   bool _captureAllowed = true;
   DateTime? _scheduledCloseAt;
   int _generation = 0;
+  NearbyCapturePolicy? _nearbyPolicy;
+  String? _objectiveKey;
+  DeviceLocation? _lastLocation;
+  bool _nearby = false;
+  bool _receivedStreamLocation = false;
+  int? _streamCaptureSeconds;
+  int _streamRestartToken = 0;
 
   @override
   void initState() {
@@ -78,6 +88,12 @@ class _DriverAutomaticTrackingState
       return widget.child;
     }
     final shift = ref.watch(activeShiftControllerProvider).value;
+    final route =
+        widget.enabled &&
+            shift?.isActive == true &&
+            _configuration.nearbyCapture?.enabled == true
+        ? ref.watch(myRouteProvider).value
+        : null;
     // Un cierre pendiente puede conservar la jornada ACTIVA. La cola anterior
     // continúa enviándose, pero no se agregan posiciones posteriores al corte.
     final policy = _configuration.shiftTracking;
@@ -89,6 +105,9 @@ class _DriverAutomaticTrackingState
     _handleGpsState(gpsEnabled);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
+        _updateNearbyPolicy(
+          route?.shiftId == shift?.id ? route?.nearbyCapture : null,
+        );
         _synchronize(shift?.isActive == true ? shift?.id : null, gpsEnabled);
       }
     });
@@ -142,36 +161,14 @@ class _DriverAutomaticTrackingState
 
       // El mapa usa este mismo stream: no esperar al reenvío de la cola ni a
       // una lectura puntual del GPS para empezar a mostrar el movimiento.
-      var receivedStreamLocation = false;
-      _locationSubscription = ref
-          .read(deviceLocationServiceProvider)
-          .watchLocations(
-            interval: Duration(seconds: _configuration.movingCaptureSeconds),
-          )
-          .listen(
-            (location) {
-              if (!mounted || generation != _generation) return;
-              receivedStreamLocation = true;
-              unawaited(_capture(shiftId, location));
-            },
-            onError: (Object error) {
-              if (!mounted || generation != _generation) return;
-              status.reportError(
-                error is AppFailure
-                    ? error.message
-                    : 'No fue posible continuar el seguimiento GPS.',
-              );
-            },
-          );
+      _receivedStreamLocation = false;
+      _subscribeLocations(shiftId, generation);
       await ref
           .read(trackingQueueCoordinatorProvider)
           .flushAll(maximumBatchSize: _configuration.maximumBatchSize);
       if (!mounted || generation != _generation || _shiftId != shiftId) return;
-      _sendTimer = Timer.periodic(
-        Duration(seconds: _configuration.sendIntervalSeconds),
-        (_) => unawaited(_flush(shiftId)),
-      );
-      if (!receivedStreamLocation) {
+      _restartSendTimer(shiftId);
+      if (!_receivedStreamLocation) {
         final firstLocation = await ref
             .read(deviceLocationServiceProvider)
             .getCurrentLocation();
@@ -179,8 +176,8 @@ class _DriverAutomaticTrackingState
           return;
         }
         // Una lectura puntual tardía no debe mover el marcador hacia atrás.
-        if (!receivedStreamLocation) {
-          await _capture(shiftId, firstLocation, force: true);
+        if (!_receivedStreamLocation) {
+          await _processLocation(shiftId, firstLocation, force: true);
           return;
         }
       }
@@ -222,7 +219,9 @@ class _DriverAutomaticTrackingState
         .setCurrentLocation(location);
     final moving = (location.speedMetersPerSecond ?? 0) >= 0.7;
     final cadence = Duration(
-      seconds: moving
+      seconds: _nearby && (_nearbyPolicy?.appliesStopped == true || moving)
+          ? _effectiveCaptureSeconds
+          : moving
           ? _configuration.movingCaptureSeconds
           : _configuration.stoppedCaptureSeconds,
     );
@@ -244,8 +243,153 @@ class _DriverAutomaticTrackingState
     if (force) await _flush(shiftId);
   }
 
+  int get _effectiveCaptureSeconds => _nearby && _nearbyPolicy != null
+      ? _configuration.movingCaptureSeconds < _nearbyPolicy!.captureSeconds
+            ? _configuration.movingCaptureSeconds
+            : _nearbyPolicy!.captureSeconds
+      : _configuration.movingCaptureSeconds;
+
+  int get _effectiveSendSeconds => _nearby && _nearbyPolicy != null
+      ? _configuration.sendIntervalSeconds < _nearbyPolicy!.sendSeconds
+            ? _configuration.sendIntervalSeconds
+            : _nearbyPolicy!.sendSeconds
+      : _configuration.sendIntervalSeconds;
+
+  void _subscribeLocations(String shiftId, int generation) {
+    final seconds = _effectiveCaptureSeconds;
+    _streamCaptureSeconds = seconds;
+    _locationSubscription = ref
+        .read(deviceLocationServiceProvider)
+        .watchLocations(interval: Duration(seconds: seconds))
+        .listen(
+          (location) {
+            if (!mounted || generation != _generation) return;
+            _receivedStreamLocation = true;
+            unawaited(_processLocation(shiftId, location));
+          },
+          onError: (Object error) {
+            if (!mounted || generation != _generation) return;
+            ref
+                .read(driverTrackingStatusProvider.notifier)
+                .reportError(
+                  error is AppFailure
+                      ? error.message
+                      : 'No fue posible continuar el seguimiento GPS.',
+                );
+          },
+        );
+  }
+
+  Future<void> _processLocation(
+    String shiftId,
+    DeviceLocation location, {
+    bool force = false,
+  }) async {
+    _lastLocation = location;
+    final entered = _evaluateNearby(location);
+    await _capture(shiftId, location, force: force || entered);
+    if (!mounted || _shiftId != shiftId || !entered) return;
+    if (_nearbyPolicy?.sendOnEntry == true) {
+      unawaited(_captureFreshNearby(shiftId, _generation));
+    }
+  }
+
+  Future<void> _captureFreshNearby(String shiftId, int generation) async {
+    try {
+      final fresh = await ref
+          .read(deviceLocationServiceProvider)
+          .getCurrentLocation();
+      if (!mounted ||
+          generation != _generation ||
+          !_nearby ||
+          _shiftId != shiftId) {
+        return;
+      }
+      _lastLocation = fresh;
+      _evaluateNearby(fresh);
+      if (_nearby) await _capture(shiftId, fresh, force: true);
+    } on Object {
+      // The location stream and queued points remain active if a single fix fails.
+    }
+  }
+
+  void _updateNearbyPolicy(NearbyCapturePolicy? policy) {
+    final nextKey = policy?.isUsable == true ? policy!.target!.key : null;
+    if (_objectiveKey == nextKey && identical(_nearbyPolicy, policy)) return;
+    final changedObjective = _objectiveKey != nextKey;
+    _objectiveKey = nextKey;
+    _nearbyPolicy = nextKey == null ? null : policy;
+    if (changedObjective) _setNearby(false);
+    if (_lastLocation case final location?) {
+      final entered = _evaluateNearby(location);
+      final shiftId = _shiftId;
+      if (entered && shiftId != null) {
+        unawaited(_captureFreshNearby(shiftId, _generation));
+      }
+    }
+  }
+
+  bool _evaluateNearby(DeviceLocation location) {
+    final policy = _nearbyPolicy;
+    final next =
+        policy?.shouldBeNearby(
+          location.latitude,
+          location.longitude,
+          wasNearby: _nearby,
+        ) ??
+        false;
+    if (next == _nearby) return false;
+    _setNearby(next);
+    return next;
+  }
+
+  void _setNearby(bool value) {
+    if (_nearby == value) return;
+    _nearby = value;
+    final shiftId = _shiftId;
+    if (shiftId == null || !_captureAllowed) return;
+    _restartSendTimer(shiftId);
+    if (_locationSubscription != null &&
+        _streamCaptureSeconds != _effectiveCaptureSeconds) {
+      final generation = _generation;
+      final token = ++_streamRestartToken;
+      unawaited(_restartLocationStream(shiftId, generation, token));
+    }
+    if (value && _nearbyPolicy?.sendOnEntry == true) {
+      unawaited(_flush(shiftId));
+    }
+  }
+
+  Future<void> _restartLocationStream(
+    String shiftId,
+    int generation,
+    int token,
+  ) async {
+    await _locationSubscription?.cancel();
+    if (!mounted ||
+        generation != _generation ||
+        token != _streamRestartToken ||
+        _shiftId != shiftId ||
+        !_captureAllowed) {
+      return;
+    }
+    _subscribeLocations(shiftId, generation);
+  }
+
+  void _restartSendTimer(String shiftId) {
+    _sendTimer?.cancel();
+    _sendTimer = Timer.periodic(
+      Duration(seconds: _effectiveSendSeconds),
+      (_) => unawaited(_flush(shiftId)),
+    );
+  }
+
   Future<void> _flush(String shiftId) async {
-    if (_sending || _retryBlockedByValidation || _shiftId != shiftId) return;
+    if (_sending) {
+      _flushRequested = true;
+      return;
+    }
+    if (_retryBlockedByValidation || _shiftId != shiftId) return;
     _sending = true;
     final status = ref.read(driverTrackingStatusProvider.notifier);
     status.setSending(true);
@@ -276,13 +420,27 @@ class _DriverAutomaticTrackingState
     } finally {
       _sending = false;
       status.setSending(false);
+      final flushAgain = _flushRequested;
+      _flushRequested = false;
+      if (flushAgain &&
+          mounted &&
+          _shiftId == shiftId &&
+          !_retryBlockedByValidation) {
+        unawaited(_flush(shiftId));
+      }
     }
   }
 
   Future<bool> _refreshConfiguration() async {
     ref.invalidate(trackingConfigurationProvider);
     try {
+      final previouslyEnabled = _configuration.nearbyCapture?.enabled == true;
       _configuration = await ref.read(trackingConfigurationProvider.future);
+      if (mounted &&
+          previouslyEnabled !=
+              (_configuration.nearbyCapture?.enabled == true)) {
+        setState(() {});
+      }
       if (_shiftId case final shiftId?) {
         final policy = _configuration.shiftTracking;
         if (policy != null) {
@@ -334,6 +492,13 @@ class _DriverAutomaticTrackingState
     _shiftId = null;
     _lastCapturedAt = null;
     _retryBlockedByValidation = false;
+    _flushRequested = false;
+    _nearby = false;
+    _nearbyPolicy = null;
+    _objectiveKey = null;
+    _lastLocation = null;
+    _streamCaptureSeconds = null;
+    _streamRestartToken++;
     if (updateStatus) {
       ref.read(driverTrackingStatusProvider.notifier).setActive(false);
     }

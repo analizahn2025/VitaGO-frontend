@@ -75,6 +75,24 @@ void main() {
     expect(feed.items.last.isImportant, isTrue);
   });
 
+  test(
+    'el desvío de ruta conserva el enlace y aparece como aviso importante',
+    () {
+      final alert = DriverNotification.fromJson({
+        'id': 'notice-id',
+        'tipo': 'DESVIACION_RUTA',
+        'mensaje': 'Revisa tu ruta y reporta cualquier incidencia.',
+        'solicitud_id': 'request-id',
+        'ruta': '/solicitudes/request-id',
+        'leida': false,
+      });
+      expect(alert.title, 'Desvío de ruta detectado');
+      expect(alert.isImportant, isTrue);
+      expect(alert.requestId, 'request-id');
+      expect(alert.route, '/solicitudes/request-id');
+    },
+  );
+
   test('consulta el conteo y marca una notificación como leída', () async {
     final repository = _FakeNotificationsRepository();
     final container = ProviderContainer(

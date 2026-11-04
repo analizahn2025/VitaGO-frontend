@@ -1,4 +1,5 @@
 import 'package:vitago_app/core/models/json_readers.dart';
+import 'package:vitago_app/features/tracking/models/nearby_capture_policy.dart';
 
 class TrackingConfiguration {
   const TrackingConfiguration({
@@ -15,13 +16,19 @@ class TrackingConfiguration {
     required this.minimumCoveragePercentage,
     this.captureDiagnostics,
     this.automaticArrival,
+    this.nearbyCapture,
     this.shiftTracking,
+    this.routeDeviation,
   });
 
   factory TrackingConfiguration.fromJson(Map<String, dynamic> json) {
     final diagnostics = optionalJsonMap(json, 'diagnostico_captura');
     final arrival = optionalJsonMap(json, 'llegada_automatica');
+    final nearbyCapture = arrival == null
+        ? null
+        : optionalJsonMap(arrival, 'captura_cercana');
     final shiftTracking = optionalJsonMap(json, 'seguimiento_jornada');
+    final routeDeviation = optionalJsonMap(json, 'desviacion_ruta');
     return TrackingConfiguration(
       serverTime: requireDateTime(json, 'hora_servidor'),
       operationalTimeZone: requireString(json, 'zona_horaria_operativa'),
@@ -58,9 +65,15 @@ class TrackingConfiguration {
       automaticArrival: arrival == null
           ? null
           : AutomaticArrivalConfiguration.fromJson(arrival),
+      nearbyCapture: nearbyCapture == null
+          ? null
+          : NearbyCapturePolicy.fromJson(nearbyCapture),
       shiftTracking: shiftTracking == null
           ? null
           : ShiftTrackingConfiguration.fromJson(shiftTracking),
+      routeDeviation: routeDeviation == null
+          ? null
+          : RouteDeviationConfiguration.fromJson(routeDeviation),
     );
   }
 
@@ -91,7 +104,49 @@ class TrackingConfiguration {
   final double minimumCoveragePercentage;
   final TrackingCaptureDiagnostics? captureDiagnostics;
   final AutomaticArrivalConfiguration? automaticArrival;
+  final NearbyCapturePolicy? nearbyCapture;
   final ShiftTrackingConfiguration? shiftTracking;
+  final RouteDeviationConfiguration? routeDeviation;
+}
+
+class RouteDeviationConfiguration {
+  const RouteDeviationConfiguration({
+    required this.enabled,
+    required this.radiusMeters,
+    required this.returnRadiusMeters,
+    required this.minimumDwellSeconds,
+    required this.minimumPoints,
+    required this.maximumAccuracyMeters,
+    required this.maximumAgeSeconds,
+    required this.requiresCurrentRoadRoute,
+    required this.onlyNextStop,
+  });
+
+  factory RouteDeviationConfiguration.fromJson(Map<String, dynamic> json) =>
+      RouteDeviationConfiguration(
+        enabled: optionalBool(json, 'habilitada'),
+        radiusMeters: _double(json, 'radio_metros'),
+        returnRadiusMeters: _double(json, 'radio_regreso_metros'),
+        minimumDwellSeconds: optionalInt(json, 'permanencia_minima_segundos'),
+        minimumPoints: optionalInt(json, 'minimo_puntos'),
+        maximumAccuracyMeters: _double(json, 'precision_maxima_metros'),
+        maximumAgeSeconds: optionalInt(json, 'antiguedad_maxima_segundos'),
+        requiresCurrentRoadRoute: optionalBool(
+          json,
+          'requiere_ruta_vial_vigente',
+        ),
+        onlyNextStop: optionalBool(json, 'solo_proxima_parada'),
+      );
+
+  final bool enabled;
+  final double radiusMeters;
+  final double returnRadiusMeters;
+  final int minimumDwellSeconds;
+  final int minimumPoints;
+  final double maximumAccuracyMeters;
+  final int maximumAgeSeconds;
+  final bool requiresCurrentRoadRoute;
+  final bool onlyNextStop;
 }
 
 class ShiftTrackingConfiguration {
